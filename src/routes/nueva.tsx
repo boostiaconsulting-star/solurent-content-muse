@@ -68,7 +68,7 @@ function NuevaPublicacion() {
       .from("biblioteca")
       .select("*")
       .order("created_at", { ascending: false })
-      .then(({ data }) => setBiblioteca((data ?? []) as Archivo[]));
+      .then(({ data }: { data: Archivo[] | null }) => setBiblioteca((data ?? []) as Archivo[]));
   }, []);
 
   // Initialize chat when entering step 2
