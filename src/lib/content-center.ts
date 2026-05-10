@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as typedSupabase } from "@/integrations/supabase/client";
+// Tables are pending in generated types; cast to any for now.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabase: any = typedSupabase;
 
 export type Publicacion = {
   id: string;
