@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as NuevaRouteImport } from './routes/nueva'
+import { Route as MetricasRouteImport } from './routes/metricas'
 import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const NuevaRoute = NuevaRouteImport.update({
   id: '/nueva',
   path: '/nueva',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetricasRoute = MetricasRouteImport.update({
+  id: '/metricas',
+  path: '/metricas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalendarioRoute = CalendarioRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
   '/calendario': typeof CalendarioRoute
+  '/metricas': typeof MetricasRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
   '/calendario': typeof CalendarioRoute
+  '/metricas': typeof MetricasRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
   '/calendario': typeof CalendarioRoute
+  '/metricas': typeof MetricasRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/biblioteca' | '/calendario' | '/nueva'
+  fullPaths: '/' | '/biblioteca' | '/calendario' | '/metricas' | '/nueva'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/biblioteca' | '/calendario' | '/nueva'
-  id: '__root__' | '/' | '/biblioteca' | '/calendario' | '/nueva'
+  to: '/' | '/biblioteca' | '/calendario' | '/metricas' | '/nueva'
+  id: '__root__' | '/' | '/biblioteca' | '/calendario' | '/metricas' | '/nueva'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
   CalendarioRoute: typeof CalendarioRoute
+  MetricasRoute: typeof MetricasRoute
   NuevaRoute: typeof NuevaRoute
 }
 
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/nueva'
       fullPath: '/nueva'
       preLoaderRoute: typeof NuevaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metricas': {
+      id: '/metricas'
+      path: '/metricas'
+      fullPath: '/metricas'
+      preLoaderRoute: typeof MetricasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calendario': {
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
   CalendarioRoute: CalendarioRoute,
+  MetricasRoute: MetricasRoute,
   NuevaRoute: NuevaRoute,
 }
 export const routeTree = rootRouteImport
