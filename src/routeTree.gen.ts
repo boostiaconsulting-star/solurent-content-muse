@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as NuevaRouteImport } from './routes/nueva'
+import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as IndexRouteImport } from './routes/index'
 
 const NuevaRoute = NuevaRouteImport.update({
   id: '/nueva',
   path: '/nueva',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarioRoute = CalendarioRouteImport.update({
+  id: '/calendario',
+  path: '/calendario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
   '/nueva': typeof NuevaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/nueva'
+  fullPaths: '/' | '/calendario' | '/nueva'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/nueva'
-  id: '__root__' | '/' | '/nueva'
+  to: '/' | '/calendario' | '/nueva'
+  id: '__root__' | '/' | '/calendario' | '/nueva'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CalendarioRoute: typeof CalendarioRoute
   NuevaRoute: typeof NuevaRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/nueva'
       fullPath: '/nueva'
       preLoaderRoute: typeof NuevaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendario': {
+      id: '/calendario'
+      path: '/calendario'
+      fullPath: '/calendario'
+      preLoaderRoute: typeof CalendarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,8 +87,19 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CalendarioRoute: CalendarioRoute,
   NuevaRoute: NuevaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
