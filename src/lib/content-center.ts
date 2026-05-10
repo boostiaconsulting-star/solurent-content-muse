@@ -52,4 +52,4 @@ export function useToggleState<T>(initial: T[] = []) {
   return { items, setItems, toggle };
 }
 
-export { supabase };
+
