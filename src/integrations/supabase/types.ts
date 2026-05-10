@@ -14,7 +14,114 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      biblioteca: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          id: string
+          nombre: string
+          tipo: string
+          url: string
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          id?: string
+          nombre: string
+          tipo: string
+          url: string
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          id?: string
+          nombre?: string
+          tipo?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      publicacion_contexto: {
+        Row: {
+          archivo_id: string
+          publicacion_id: string
+        }
+        Insert: {
+          archivo_id: string
+          publicacion_id: string
+        }
+        Update: {
+          archivo_id?: string
+          publicacion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publicacion_contexto_archivo_id_fkey"
+            columns: ["archivo_id"]
+            isOneToOne: false
+            referencedRelation: "biblioteca"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publicacion_contexto_publicacion_id_fkey"
+            columns: ["publicacion_id"]
+            isOneToOne: false
+            referencedRelation: "publicaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publicaciones: {
+        Row: {
+          angulo: string | null
+          contenido_tipo: string | null
+          contenido_url: string | null
+          copy: Json | null
+          created_at: string
+          equipo: string | null
+          estado: string
+          fecha_programada: string | null
+          formato: string | null
+          id: string
+          idea: string | null
+          imagen_url: string | null
+          origen: string
+          redes: string[] | null
+        }
+        Insert: {
+          angulo?: string | null
+          contenido_tipo?: string | null
+          contenido_url?: string | null
+          copy?: Json | null
+          created_at?: string
+          equipo?: string | null
+          estado?: string
+          fecha_programada?: string | null
+          formato?: string | null
+          id?: string
+          idea?: string | null
+          imagen_url?: string | null
+          origen?: string
+          redes?: string[] | null
+        }
+        Update: {
+          angulo?: string | null
+          contenido_tipo?: string | null
+          contenido_url?: string | null
+          copy?: Json | null
+          created_at?: string
+          equipo?: string | null
+          estado?: string
+          fecha_programada?: string | null
+          formato?: string | null
+          id?: string
+          idea?: string | null
+          imagen_url?: string | null
+          origen?: string
+          redes?: string[] | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
