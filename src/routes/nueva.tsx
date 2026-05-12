@@ -223,6 +223,18 @@ function NuevaPublicacion() {
     }
   };
 
+  // Step 4: only regenerate copy with current inputs and selected redes
+  const regenerarCopy = async () => {
+    if (!redes.length) { toast.error("Selecciona al menos una red"); return; }
+    setGenerating(true);
+    try {
+      await runCopies();
+      toast.success("Copy regenerado");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const aprobarYProgramar = () => setStep(5);
 
   const guardarYEnviar = async () => {
