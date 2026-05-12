@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
+import { generateImage, generateCopies } from "@/lib/generate.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -169,36 +171,56 @@ function NuevaPublicacion() {
     }, 700);
   };
 
-  // ---------- Copy generation (used by both flows) ----------
-  const buildCopies = () => {
-    const base = idea.trim() || contextoExtra.trim() || `${equipo} con ángulo ${angulo}`;
-    const copies: Record<string, string> = {};
-    for (const r of redes) {
-      if (r === "Instagram") copies[r] = `✨ ${base}\n\n#Solurent #${angulo.replace("/", "")} #EquiposEnRenta`;
-      else if (r === "Facebook") copies[r] = `${base}\n\nEn Solurent rentamos equipo con respaldo, garantía y servicio. Cotiza hoy 👉`;
-      else if (r === "TikTok") copies[r] = `POV: necesitas ${equipo || "el equipo correcto"} y Solurent llega 🚀\n${base}\n#fyp #solurent`;
-      else copies[r] = `${equipo || "Equipo"} | ${angulo}\n${base}`;
+  // ---------- Generation (Lovable AI image + Claude copy) ----------
+  const callImage = useServerFn(generateImage);
+  const callCopies = useServerFn(generateCopies);
+
+  const buildInput = () => ({
+    equipo,
+    idea: origen === "ia" ? idea : (contextoExtra || idea),
+    angulo,
+    formato: origen === "ia" ? formato : (uploadTipo === "video" ? "Video" : "Imagen"),
+    redes,
+    contextoExtra: origen === "contenido_propio" ? contextoExtra : undefined,
+  });
+
+  const runCopies = async () => {
+    try {
+      const { copies } = await callCopies({ data: buildInput() });
+      setCopyByRed(copies);
+    } catch (e) {
+      toast.error((e as Error).message);
+      throw e;
     }
-    return copies;
   };
 
-  // IA: generate image+copy
+  // IA: generate image+copy in parallel
   const generarIA = async () => {
     setStep(3); setGenerating(true);
-    await new Promise((r) => setTimeout(r, 2200));
-    setImagenUrl(SAMPLE_IMAGE);
-    setCopyByRed(buildCopies());
-    setGenerating(false);
-    setStep(4);
+    try {
+      const [img] = await Promise.all([
+        callImage({ data: buildInput() }).catch((e) => {
+          toast.error("Imagen: " + (e as Error).message);
+          return { url: null as string | null };
+        }),
+        runCopies(),
+      ]);
+      if (img.url) setImagenUrl(img.url);
+      setStep(4);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   // Own content: generate copy only (step 3)
   const generarCopyPropio = async () => {
     setStep(3); setGenerating(true);
-    await new Promise((r) => setTimeout(r, 1400));
-    setCopyByRed(buildCopies());
-    setGenerating(false);
-    setStep(4);
+    try {
+      await runCopies();
+      setStep(4);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const aprobarYProgramar = () => setStep(5);
