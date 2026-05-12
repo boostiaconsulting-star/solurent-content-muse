@@ -46,6 +46,37 @@ function Index() {
   const [toReschedule, setToReschedule] = useState<Publicacion | null>(null);
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const sendToMakeFn = useServerFn(sendToMake);
+
+  const publicarAhora = async (p: Publicacion) => {
+    if (!confirm(`¿Publicar "${p.equipo || "esta publicación"}" ahora? Se cancelará la programación.`)) return;
+    setPublishingId(p.id);
+    try {
+      await sendToMakeFn({
+        data: {
+          imagen_url: p.imagen_url,
+          copy: (p.copy ?? {}) as Record<string, string>,
+          redes: (p.redes ?? []).map((r) => r.toLowerCase().replace(" shorts", "")),
+          fecha: new Date().toISOString(),
+          equipo: p.equipo ?? "",
+        },
+      });
+      const { error } = await supabase
+        .from("publicaciones")
+        .update({ fecha_programada: null, estado: "publicado" })
+        .eq("id", p.id);
+      if (error) throw new Error(error.message);
+      setItems((prev) => prev.map((x) =>
+        x.id === p.id ? { ...x, fecha_programada: null, estado: "publicado" } : x
+      ));
+      toast.success("Publicado y programación cancelada");
+    } catch (e) {
+      toast.error("No se pudo publicar: " + (e as Error).message);
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   const reload = () => {
     setLoading(true);
