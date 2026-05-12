@@ -28,6 +28,7 @@ function Biblioteca() {
   const [uploading, setUploading] = useState(false);
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<Archivo | null>(null);
 
   const load = () => {
     supabase
