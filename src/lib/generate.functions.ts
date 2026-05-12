@@ -59,6 +59,8 @@ Estilo: fotografía comercial premium, iluminación natural, composición limpia
       if (res.status === 401 || res.status === 403) throw new Error("Credenciales de Higgsfield inválidas. Revísalas en Configuración.");
       if (res.status === 429) throw new Error("Límite de Higgsfield alcanzado, intenta de nuevo en un momento.");
       if (res.status === 402) throw new Error("Sin créditos en Higgsfield. Agrega saldo en cloud.higgsfield.ai.");
+      // Higgsfield devuelve 500 cuando el par KEY_ID:KEY_SECRET tiene formato válido pero no coincide con una credencial real.
+      if (res.status === 500) throw new Error("Higgsfield rechazó las credenciales (500). Verifica que HIGGSFIELD_API_KEY sea el KEY_ID y HIGGSFIELD_API_SECRET el KEY_SECRET (son dos valores distintos en cloud.higgsfield.ai → API Keys).");
       throw new Error(`Error generando imagen (${res.status}): ${t}`);
     }
 
