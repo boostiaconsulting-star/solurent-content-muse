@@ -263,6 +263,12 @@ function Index() {
         </div>
       )}
 
+      <EditPublicacionDialog
+        publicacion={toEdit}
+        onClose={() => setToEdit(null)}
+        onSaved={(updated) => setItems((prev) => prev.map((x) => x.id === updated.id ? updated : x))}
+      />
+
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
