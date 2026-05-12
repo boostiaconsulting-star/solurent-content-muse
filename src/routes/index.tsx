@@ -192,6 +192,17 @@ function Index() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => publicarAhora(p)}
+                      disabled={publishingId === p.id}
+                    >
+                      {publishingId === p.id ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
+                      Publicar ahora
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openReschedule(p)}>
                       <CalendarCog className="h-4 w-4 mr-2" />
                       {p.fecha_programada ? "Reprogramar" : "Programar"}
