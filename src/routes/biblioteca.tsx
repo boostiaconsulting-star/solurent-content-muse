@@ -147,13 +147,21 @@ function Biblioteca() {
         <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {items.map((a) => (
             <Card key={a.id} className="overflow-hidden group relative">
-              <div className="aspect-square bg-muted grid place-items-center overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPreview(a)}
+                className="aspect-square bg-muted grid place-items-center overflow-hidden w-full hover:opacity-90 transition relative"
+                title="Vista previa"
+              >
                 {a.tipo === "imagen" ? (
                   <img src={a.url} alt={a.nombre} className="w-full h-full object-cover" />
                 ) : (
                   <FileText className="h-14 w-14 text-primary" />
                 )}
-              </div>
+                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <Eye className="h-6 w-6 text-white" />
+                </span>
+              </button>
               <CardContent className="p-3 space-y-1">
                 <div className="flex items-start gap-2">
                   {a.tipo === "imagen" ? (
@@ -167,19 +175,63 @@ function Biblioteca() {
                 <div className="text-xs text-muted-foreground">
                   {new Date(a.created_at).toLocaleDateString("es-MX")}
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="w-full mt-1 text-destructive hover:text-destructive"
-                  onClick={() => remove(a)}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" /> Eliminar
-                </Button>
+                <div className="flex gap-1 mt-1">
+                  <Button size="sm" variant="ghost" className="flex-1" onClick={() => setPreview(a)}>
+                    <Eye className="h-4 w-4 mr-1" /> Ver
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="flex-1 text-destructive hover:text-destructive"
+                    onClick={() => remove(a)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> Eliminar
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">{preview?.nombre}</DialogTitle>
+            <p className="text-xs text-muted-foreground">{preview?.categoria}</p>
+          </DialogHeader>
+          <div className="flex-1 min-h-[60vh] bg-muted rounded-md overflow-hidden">
+            {preview?.tipo === "pdf" ? (
+              <iframe src={preview.url} title={preview.nombre} className="w-full h-full min-h-[60vh]" />
+            ) : preview ? (
+              <img src={preview.url} alt={preview.nombre} className="w-full h-full object-contain" />
+            ) : null}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => preview && window.open(preview.url, "_blank")}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" /> Abrir en pestaña
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (preview) {
+                    remove(preview);
+                    setPreview(null);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+              </Button>
+              <Button onClick={() => setPreview(null)}>Cerrar</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
