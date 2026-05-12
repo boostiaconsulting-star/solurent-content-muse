@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase, type Publicacion } from "@/lib/content-center";
@@ -15,16 +16,21 @@ export const Route = createFileRoute("/calendario")({
 });
 
 function Calendario() {
-  const [items, setItems] = useState<Publicacion[]>([]);
+  const { data: items = [] } = useQuery<Publicacion[]>({
+    queryKey: ["publicaciones-calendario"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("publicaciones")
+        .select("*")
+        .not("fecha_programada", "is", null)
+        .order("fecha_programada", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Publicacion[];
+    },
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    supabase
-      .from("publicaciones")
-      .select("*")
-      .not("fecha_programada", "is", null)
-      .order("fecha_programada", { ascending: true })
-      .then(({ data }: { data: Publicacion[] | null }) => setItems((data ?? []) as Publicacion[]));
-  }, []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Publicacion[]>();
