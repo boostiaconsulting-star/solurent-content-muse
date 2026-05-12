@@ -116,7 +116,7 @@ async function generateWithNanoBanana(data: GenInput): Promise<string> {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return uploadToBucket(bytes, mime);
+  return uploadToBucket(bytes, mime, data.equipo, data.angulo);
 }
 
 /** Text-only generation via Higgsfield Soul. */
@@ -169,7 +169,7 @@ async function generateWithHiggsfield(data: GenInput): Promise<string> {
   if (!imgRes.ok) throw new Error("No se pudo descargar la imagen de Higgsfield");
   const mime = imgRes.headers.get("content-type") || "image/png";
   const bytes = new Uint8Array(await imgRes.arrayBuffer());
-  return uploadToBucket(bytes, mime);
+  return uploadToBucket(bytes, mime, data.equipo, data.angulo);
 }
 
 export const generateImage = createServerFn({ method: "POST" })
