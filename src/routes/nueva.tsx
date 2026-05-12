@@ -134,8 +134,13 @@ function NuevaPublicacion() {
     setUploadPreview(URL.createObjectURL(file));
     setUploading(true);
 
-    const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase();
+    const slug = (s: string) => (s || "sin-nombre").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "sin-nombre";
+    const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
+    const ts = `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+    const path = `${slug(equipo)}_${slug(angulo)}_${ts}.${ext}`;
     const { error } = await supabase.storage
       .from("contenido_propio")
       .upload(path, file, { contentType: file.type, upsert: false });
