@@ -22,6 +22,7 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
+import { sendToMake } from "@/lib/webhook.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
