@@ -41,6 +41,36 @@ export type Database = {
         }
         Relationships: []
       }
+      branding: {
+        Row: {
+          colors: Json | null
+          fonts: Json | null
+          id: string
+          logo_url: string | null
+          raw: Json | null
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          colors?: Json | null
+          fonts?: Json | null
+          id?: string
+          logo_url?: string | null
+          raw?: Json | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          colors?: Json | null
+          fonts?: Json | null
+          id?: string
+          logo_url?: string | null
+          raw?: Json | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       publicacion_contexto: {
         Row: {
           archivo_id: string
