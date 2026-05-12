@@ -291,8 +291,26 @@ function NuevaPublicacion() {
         .insert(contexto.map((archivo_id) => ({ publicacion_id: data.id, archivo_id })));
     }
 
+    if (fechaProgramada) {
+      try {
+        await sendToMakeFn({
+          data: {
+            imagen_url: origen === "ia" ? imagenUrl : uploadedUrl,
+            copy: copyByRed,
+            redes: redes.map((r) => r.toLowerCase().replace(" shorts", "")),
+            fecha: fechaProgramada,
+            equipo,
+          },
+        });
+      } catch (e) {
+        toast.error("Guardado, pero falló el webhook: " + (e as Error).message);
+        setDone(true);
+        return;
+      }
+    }
+
     setDone(true);
-    toast.success("Enviado a Zernio para publicación");
+    toast.success("Programado y enviado a Make");
   };
 
   const setQuickDate = (d: Date, h = "09:00") => {
