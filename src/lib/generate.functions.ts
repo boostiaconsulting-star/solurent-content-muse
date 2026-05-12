@@ -134,7 +134,7 @@ async function generateWithNanoBanana(data: GenInput, brand: BrandCtx): Promise<
 }
 
 /** Text-only generation via Higgsfield Soul. */
-async function generateWithHiggsfield(data: GenInput): Promise<string> {
+async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<string> {
   const HF_KEY = process.env.HIGGSFIELD_API_KEY;
   const HF_SECRET = process.env.HIGGSFIELD_API_SECRET;
   if (!HF_KEY || !HF_SECRET) throw new Error("HIGGSFIELD_API_KEY / HIGGSFIELD_API_SECRET no configuradas");
@@ -143,7 +143,7 @@ async function generateWithHiggsfield(data: GenInput): Promise<string> {
   const res = await fetch("https://platform.higgsfield.ai/higgsfield-ai/soul/standard", {
     method: "POST",
     headers: { Authorization: authHeader, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ prompt: buildPrompt(data, false), aspect_ratio: "1:1", resolution: "1080p" }),
+    body: JSON.stringify({ prompt: buildPrompt(data, false, brand), aspect_ratio: "1:1", resolution: "1080p" }),
   });
 
   if (!res.ok) {
@@ -189,12 +189,11 @@ async function generateWithHiggsfield(data: GenInput): Promise<string> {
 export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
+    const brand = await loadBranding();
     const hasRefs = (data.referenceImageUrls ?? []).length > 0;
-    // Con referencias visuales o instrucciones específicas → Nano Banana (image-to-image / edición)
-    // Sin referencias → Higgsfield Soul (mejor calidad fotográfica pura text-to-image)
     const url = hasRefs
-      ? await generateWithNanoBanana(data)
-      : await generateWithHiggsfield(data);
+      ? await generateWithNanoBanana(data, brand)
+      : await generateWithHiggsfield(data, brand);
     return { url };
   });
 
