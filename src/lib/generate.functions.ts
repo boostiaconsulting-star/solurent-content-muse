@@ -53,19 +53,13 @@ function slug(s: string): string {
     .slice(0, 60) || "sin-nombre";
 }
 
-function timestampCompact(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+export function buildAssetName(equipo: string, ext: string): string {
+  return `${slug(equipo)}_${Date.now()}.${ext}`;
 }
 
-export function buildAssetName(equipo: string, angulo: string, ext: string): string {
-  return `${slug(equipo)}_${slug(angulo)}_${timestampCompact()}.${ext}`;
-}
-
-async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string, angulo: string): Promise<string> {
+async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): Promise<string> {
   const ext = (mime.split("/")[1]?.split(";")[0] || "png").toLowerCase().replace("jpeg", "jpg");
-  const path = `gen/${buildAssetName(equipo, angulo, ext)}`;
+  const path = `gen/${buildAssetName(equipo, ext)}`;
   const { error: upErr } = await supabaseAdmin.storage
     .from("contenido_propio")
     .upload(path, bytes, { contentType: mime, upsert: false });
