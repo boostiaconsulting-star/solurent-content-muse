@@ -221,6 +221,10 @@ function Index() {
                       )}
                       Publicar ahora
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setToEdit(p)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openReschedule(p)}>
                       <CalendarCog className="h-4 w-4 mr-2" />
                       {p.fecha_programada ? "Reprogramar" : "Programar"}
