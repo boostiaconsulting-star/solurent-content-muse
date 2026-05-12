@@ -45,6 +45,7 @@ function Index() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<Publicacion | null>(null);
   const [toReschedule, setToReschedule] = useState<Publicacion | null>(null);
+  const [toEdit, setToEdit] = useState<Publicacion | null>(null);
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
