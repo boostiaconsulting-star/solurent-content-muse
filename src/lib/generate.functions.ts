@@ -24,8 +24,9 @@ const REDES_GUIDE: Record<string, string> = {
 export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurada");
+    const HF_KEY = process.env.HIGGSFIELD_API_KEY;
+    const HF_SECRET = process.env.HIGGSFIELD_API_SECRET;
+    if (!HF_KEY || !HF_SECRET) throw new Error("HIGGSFIELD_API_KEY / HIGGSFIELD_API_SECRET no configuradas");
 
     const prompt = `Imagen publicitaria profesional para redes sociales de Solurent (renta de equipos industriales).
 Equipo/producto: ${data.equipo || "equipo industrial"}
@@ -34,38 +35,71 @@ Formato: ${data.formato}
 Idea/mensaje: ${data.idea}
 ${data.contextoExtra ? `Contexto extra: ${data.contextoExtra}` : ""}
 
-Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, formato cuadrado 1:1, calidad 4K.`;
+Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, calidad 4K.`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const authHeader = `Key ${HF_KEY}:${HF_SECRET}`;
+
+    // 1) Lanzar generación
+    const res = await fetch("https://platform.higgsfield.ai/higgsfield-ai/soul/standard", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: authHeader,
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
+        prompt,
+        aspect_ratio: "1:1",
+        resolution: "1080p",
       }),
     });
 
     if (!res.ok) {
       const t = await res.text();
-      if (res.status === 429) throw new Error("Límite de generación alcanzado, intenta de nuevo en un momento.");
-      if (res.status === 402) throw new Error("Sin créditos en Lovable AI. Agrega créditos en Settings → Workspace → Usage.");
+      if (res.status === 401 || res.status === 403) throw new Error("Credenciales de Higgsfield inválidas. Revísalas en Configuración.");
+      if (res.status === 429) throw new Error("Límite de Higgsfield alcanzado, intenta de nuevo en un momento.");
+      if (res.status === 402) throw new Error("Sin créditos en Higgsfield. Agrega saldo en cloud.higgsfield.ai.");
       throw new Error(`Error generando imagen (${res.status}): ${t}`);
     }
 
-    const json = await res.json();
-    const dataUrl: string | undefined = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!dataUrl?.startsWith("data:image/")) throw new Error("Respuesta sin imagen");
+    const initial = await res.json();
+    const requestId: string | undefined = initial.request_id || initial.id;
+    let statusUrl: string | undefined = initial.status_url;
+    let imageUrl: string | undefined = initial.images?.[0]?.url;
 
-    // Subir al bucket contenido_propio
-    const [, mime, b64] = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/) || [];
-    if (!b64) throw new Error("Formato de imagen inválido");
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const ext = mime.split("/")[1] || "png";
-    const path = `ai/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    // 2) Poll si no vino completa
+    if (!imageUrl) {
+      if (!statusUrl && requestId) {
+        statusUrl = `https://platform.higgsfield.ai/requests/${requestId}/status`;
+      }
+      if (!statusUrl) throw new Error("Higgsfield no devolvió status_url ni request_id");
+
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const sres = await fetch(statusUrl, {
+          headers: { Authorization: authHeader, Accept: "application/json" },
+        });
+        if (!sres.ok) continue;
+        const sjson = await sres.json();
+        const status = sjson.status;
+        if (status === "completed") {
+          imageUrl = sjson.images?.[0]?.url || sjson.results?.[0]?.url;
+          break;
+        }
+        if (status === "failed") throw new Error("Higgsfield falló: " + (sjson.error || "sin detalle"));
+        if (status === "nsfw") throw new Error("Higgsfield rechazó el prompt por contenido (NSFW). Reformula la idea.");
+      }
+      if (!imageUrl) throw new Error("Higgsfield no completó la generación a tiempo. Intenta de nuevo.");
+    }
+
+    // 3) Descargar y subir al bucket contenido_propio
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error("No se pudo descargar la imagen de Higgsfield");
+    const mime = imgRes.headers.get("content-type") || "image/png";
+    const bytes = new Uint8Array(await imgRes.arrayBuffer());
+    const ext = mime.split("/")[1]?.split(";")[0] || "png";
+    const path = `higgsfield/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const { error: upErr } = await supabaseAdmin.storage
       .from("contenido_propio")
