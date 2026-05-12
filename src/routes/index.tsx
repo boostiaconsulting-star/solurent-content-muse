@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog } from "lucide-react";
+import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2 } from "lucide-react";
 import { MediaActions } from "@/components/MediaActions";
+import { useServerFn } from "@tanstack/react-start";
+import { sendToMake } from "@/lib/webhook.functions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,37 @@ function Index() {
   const [toReschedule, setToReschedule] = useState<Publicacion | null>(null);
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const sendToMakeFn = useServerFn(sendToMake);
+
+  const publicarAhora = async (p: Publicacion) => {
+    if (!confirm(`¿Publicar "${p.equipo || "esta publicación"}" ahora? Se cancelará la programación.`)) return;
+    setPublishingId(p.id);
+    try {
+      await sendToMakeFn({
+        data: {
+          imagen_url: p.imagen_url,
+          copy: (p.copy ?? {}) as Record<string, string>,
+          redes: (p.redes ?? []).map((r) => r.toLowerCase().replace(" shorts", "")),
+          fecha: new Date().toISOString(),
+          equipo: p.equipo ?? "",
+        },
+      });
+      const { error } = await supabase
+        .from("publicaciones")
+        .update({ fecha_programada: null, estado: "publicado" })
+        .eq("id", p.id);
+      if (error) throw new Error(error.message);
+      setItems((prev) => prev.map((x) =>
+        x.id === p.id ? { ...x, fecha_programada: null, estado: "publicado" } : x
+      ));
+      toast.success("Publicado y programación cancelada");
+    } catch (e) {
+      toast.error("No se pudo publicar: " + (e as Error).message);
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   const reload = () => {
     setLoading(true);
@@ -159,6 +192,17 @@ function Index() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => publicarAhora(p)}
+                      disabled={publishingId === p.id}
+                    >
+                      {publishingId === p.id ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
+                      Publicar ahora
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openReschedule(p)}>
                       <CalendarCog className="h-4 w-4 mr-2" />
                       {p.fecha_programada ? "Reprogramar" : "Programar"}
