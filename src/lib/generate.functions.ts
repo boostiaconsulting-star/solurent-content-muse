@@ -44,9 +44,28 @@ IMPORTANTE: Usa la(s) imagen(es) adjunta(s) como REFERENCIA VISUAL del equipo re
   return base;
 }
 
-async function uploadToBucket(bytes: Uint8Array, mime: string): Promise<string> {
-  const ext = mime.split("/")[1]?.split(";")[0] || "png";
-  const path = `gen/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+function slug(s: string): string {
+  return (s || "sin-nombre")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "sin-nombre";
+}
+
+function timestampCompact(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+
+export function buildAssetName(equipo: string, angulo: string, ext: string): string {
+  return `${slug(equipo)}_${slug(angulo)}_${timestampCompact()}.${ext}`;
+}
+
+async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string, angulo: string): Promise<string> {
+  const ext = (mime.split("/")[1]?.split(";")[0] || "png").toLowerCase().replace("jpeg", "jpg");
+  const path = `gen/${buildAssetName(equipo, angulo, ext)}`;
   const { error: upErr } = await supabaseAdmin.storage
     .from("contenido_propio")
     .upload(path, bytes, { contentType: mime, upsert: false });
