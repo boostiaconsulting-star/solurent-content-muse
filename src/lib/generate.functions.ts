@@ -25,7 +25,27 @@ const REDES_GUIDE: Record<string, string> = {
     "Título-gancho corto al inicio + descripción breve (máx 100 palabras). 3-5 hashtags al final. Tono dinámico y directo.",
 };
 
-function buildPrompt(data: GenInput, withReference: boolean) {
+type BrandCtx = { colors?: Record<string, string> | null; logo_url?: string | null } | null;
+
+async function loadBranding(): Promise<BrandCtx> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("branding").select("colors, logo_url").eq("id", "default").maybeSingle();
+    return (data ?? null) as BrandCtx;
+  } catch { return null; }
+}
+
+function brandBlock(brand: BrandCtx): string {
+  if (!brand) return "";
+  const c = brand.colors ?? {};
+  const palette = Object.entries(c).filter(([, v]) => !!v).map(([k, v]) => `${k} ${v}`).join(", ");
+  if (!palette) return "";
+  return `\n\nIDENTIDAD DE MARCA SOLURENT (respeta esta paleta en la imagen):
+Paleta: ${palette}.
+Usa estos colores en luces, props, fondos o gráficos sutiles para que la imagen se sienta de la marca. No incluyas el logo en la imagen, solo respeta el estilo cromático.`;
+}
+
+function buildPrompt(data: GenInput, withReference: boolean, brand: BrandCtx) {
   const base = `Imagen publicitaria profesional para redes sociales de Solurent (renta de equipos industriales).
 Equipo/producto: ${data.equipo || "equipo industrial"}
 Ángulo de comunicación: ${data.angulo}
@@ -34,7 +54,7 @@ Idea/mensaje: ${data.idea}
 ${data.contextoExtra ? `Contexto extra: ${data.contextoExtra}` : ""}
 ${data.instrucciones ? `Instrucciones específicas del usuario: ${data.instrucciones}` : ""}
 
-Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, calidad 4K.`;
+Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, calidad 4K.${brandBlock(brand)}`;
 
   if (withReference) {
     return `${base}
