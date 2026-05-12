@@ -70,8 +70,10 @@ function NuevaPublicacion() {
 
   // Generation
   const [generating, setGenerating] = useState(false);
+  const [regeneratingImg, setRegeneratingImg] = useState(false);
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
   const [copyByRed, setCopyByRed] = useState<Record<string, string>>({});
+  const [imgInstrucciones, setImgInstrucciones] = useState("");
 
   // Schedule
   const [fecha, setFecha] = useState("");
