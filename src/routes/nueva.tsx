@@ -603,6 +603,13 @@ function NuevaPublicacion() {
               {origen === "contenido_propio" && uploadedUrl && uploadTipo === "video" && (
                 <video src={uploadedUrl} controls className="w-full h-full object-contain" />
               )}
+              {((origen === "ia" && imagenUrl) || (origen === "contenido_propio" && uploadedUrl)) && !regeneratingImg && (
+                <MediaActions
+                  url={(origen === "ia" ? imagenUrl : uploadedUrl)!}
+                  caption={`${equipo} · ${angulo}`}
+                  className="absolute top-2 right-2"
+                />
+              )}
               {regeneratingImg && (
                 <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
