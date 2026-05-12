@@ -249,6 +249,22 @@ function NuevaPublicacion() {
     }
   };
 
+  const regenerarImagen = async () => {
+    setRegeneratingImg(true);
+    try {
+      const { url } = await callImage({ data: buildInput({ instrucciones: imgInstrucciones }) });
+      if (url) {
+        setImagenUrl(url);
+        toast.success(imgInstrucciones ? "Imagen regenerada con tus instrucciones" : "Imagen regenerada");
+        setImgInstrucciones("");
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRegeneratingImg(false);
+    }
+  };
+
   const aprobarYProgramar = () => setStep(5);
 
   const guardarYEnviar = async () => {
