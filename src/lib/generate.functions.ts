@@ -89,13 +89,13 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
 }
 
 /** Image-to-image / reference-aware generation via Lovable AI Nano Banana. */
-async function generateWithNanoBanana(data: GenInput): Promise<string> {
+async function generateWithNanoBanana(data: GenInput, brand: BrandCtx): Promise<string> {
   const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurada");
 
   const refs = (data.referenceImageUrls ?? []).slice(0, 4); // cap a 4 referencias
   const content: Array<Record<string, unknown>> = [
-    { type: "text", text: buildPrompt(data, refs.length > 0) },
+    { type: "text", text: buildPrompt(data, refs.length > 0, brand) },
     ...refs.map((url) => ({ type: "image_url", image_url: { url } })),
   ];
 
