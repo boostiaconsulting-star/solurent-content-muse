@@ -23,7 +23,7 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
-import { sendToMake } from "@/lib/webhook.functions";
+import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -300,15 +300,15 @@ function NuevaPublicacion() {
 
     if (fechaProgramada) {
       try {
-        await sendToMakeFn({
-          data: {
-            imagen_url: origen === "ia" ? imagenUrl : uploadedUrl,
-            copy: copyByRed,
-            redes: redes.map((r) => r.toLowerCase().replace(" shorts", "")),
-            fecha: fechaProgramada,
-            equipo,
-          },
+        const payload = buildMakePayload({
+          imagen_url: origen === "ia" ? imagenUrl : uploadedUrl,
+          contenido_tipo: origen === "contenido_propio" && uploadTipo === "video" ? "video" : "image",
+          copyRaw: copyByRed,
+          redesRaw: redes,
+          fecha: fechaProgramada,
+          equipo,
         });
+        await sendToMakeFn({ data: payload });
       } catch (e) {
         toast.error("Guardado, pero falló el webhook: " + (e as Error).message);
         setDone(true);

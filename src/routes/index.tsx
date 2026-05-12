@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2 } from "lucide-react";
 import { MediaActions } from "@/components/MediaActions";
 import { useServerFn } from "@tanstack/react-start";
-import { sendToMake } from "@/lib/webhook.functions";
+import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -53,15 +53,15 @@ function Index() {
     if (!confirm(`¿Publicar "${p.equipo || "esta publicación"}" ahora? Se cancelará la programación.`)) return;
     setPublishingId(p.id);
     try {
-      await sendToMakeFn({
-        data: {
-          imagen_url: p.imagen_url,
-          copy: (p.copy ?? {}) as Record<string, string>,
-          redes: (p.redes ?? []).map((r) => r.toLowerCase().replace(" shorts", "")),
-          fecha: new Date().toISOString(),
-          equipo: p.equipo ?? "",
-        },
+      const payload = buildMakePayload({
+        imagen_url: p.imagen_url,
+        contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
+        copyRaw: (p.copy ?? {}) as Record<string, string>,
+        redesRaw: p.redes ?? [],
+        fecha: new Date().toISOString(),
+        equipo: p.equipo ?? "",
       });
+      await sendToMakeFn({ data: payload });
       const { error } = await supabase
         .from("publicaciones")
         .update({ fecha_programada: null, estado: "publicado" })
