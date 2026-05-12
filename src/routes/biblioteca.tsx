@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Trash2, Upload, FileText, Image as ImageIcon } from "lucide-react";
+import { Trash2, Upload, FileText, Image as ImageIcon, Eye, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase, type Archivo, CATEGORIAS } from "@/lib/content-center";
 
 export const Route = createFileRoute("/biblioteca")({
