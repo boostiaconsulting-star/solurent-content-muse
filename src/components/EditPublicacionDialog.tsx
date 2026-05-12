@@ -33,9 +33,8 @@ export function EditPublicacionDialog({
   const [regenerating, setRegenerating] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Reset cuando cambia la publicación
-  if (publicacion && publicacion.id !== (lastIdRef.current ?? null)) {
-    lastIdRef.current = publicacion.id;
+  useEffect(() => {
+    if (!publicacion) return;
     setCopy(publicacion.copy ?? {});
     setImagenUrl(publicacion.imagen_url ?? null);
     setChat([{
@@ -43,7 +42,7 @@ export function EditPublicacionDialog({
       text: `Estoy aquí para ajustar "${publicacion.equipo || "esta publicación"}". Dime qué quieres cambiar de la imagen (estilo, escena, colores, ángulo) y la regenero.`,
     }]);
     setChatInput("");
-  }
+  }, [publicacion?.id]);
 
   if (!publicacion) return null;
 
