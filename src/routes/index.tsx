@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog } from "lucide-react";
+import { MediaActions } from "@/components/MediaActions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
