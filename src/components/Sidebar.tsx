@@ -1,11 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Calendar, FolderOpen, BarChart3, Sparkles } from "lucide-react";
+import { Calendar, FolderOpen, BarChart3, Sparkles, Palette } from "lucide-react";
 
 const items = [
   { title: "Publicaciones", url: "/", icon: Sparkles },
   { title: "Calendario", url: "/calendario", icon: Calendar },
   { title: "Biblioteca", url: "/biblioteca", icon: FolderOpen },
   { title: "Métricas", url: "/metricas", icon: BarChart3 },
+  { title: "Branding", url: "/branding", icon: Palette },
 ];
 
 export function Sidebar() {
