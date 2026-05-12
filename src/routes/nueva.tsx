@@ -43,6 +43,7 @@ const IMG_MAX = 50 * 1024 * 1024;
 
 function NuevaPublicacion() {
   const navigate = useNavigate();
+  const sendToMakeFn = useServerFn(sendToMake);
   const [origen, setOrigen] = useState<Origen>("ia");
   const [step, setStep] = useState(1);
 
