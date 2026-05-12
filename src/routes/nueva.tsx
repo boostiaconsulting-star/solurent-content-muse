@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
+import { generateImage, generateCopies } from "@/lib/generate.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
