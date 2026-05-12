@@ -22,6 +22,7 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
+import { sendToMake } from "@/lib/webhook.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -42,6 +43,7 @@ const IMG_MAX = 50 * 1024 * 1024;
 
 function NuevaPublicacion() {
   const navigate = useNavigate();
+  const sendToMakeFn = useServerFn(sendToMake);
   const [origen, setOrigen] = useState<Origen>("ia");
   const [step, setStep] = useState(1);
 
@@ -290,8 +292,26 @@ function NuevaPublicacion() {
         .insert(contexto.map((archivo_id) => ({ publicacion_id: data.id, archivo_id })));
     }
 
+    if (fechaProgramada) {
+      try {
+        await sendToMakeFn({
+          data: {
+            imagen_url: origen === "ia" ? imagenUrl : uploadedUrl,
+            copy: copyByRed,
+            redes: redes.map((r) => r.toLowerCase().replace(" shorts", "")),
+            fecha: fechaProgramada,
+            equipo,
+          },
+        });
+      } catch (e) {
+        toast.error("Guardado, pero falló el webhook: " + (e as Error).message);
+        setDone(true);
+        return;
+      }
+    }
+
     setDone(true);
-    toast.success("Enviado a Zernio para publicación");
+    toast.success("Programado y enviado a Make");
   };
 
   const setQuickDate = (d: Date, h = "09:00") => {
