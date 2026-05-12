@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog } from "lucide-react";
+import { MediaActions } from "@/components/MediaActions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -141,8 +142,13 @@ function Index() {
           {items.map((p) => (
             <Card key={p.id} className="overflow-hidden relative group">
               {p.imagen_url && (
-                <div className="aspect-video bg-muted">
+                <div className="aspect-video bg-muted relative group/img">
                   <img src={p.imagen_url} alt={p.equipo ?? ""} className="w-full h-full object-cover" />
+                  <MediaActions
+                    url={p.imagen_url}
+                    caption={`${p.equipo ?? ""} · ${p.angulo ?? ""}`}
+                    className="absolute bottom-2 left-2 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                  />
                 </div>
               )}
               <div className="absolute top-2 right-2">

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { Stepper } from "@/components/Stepper";
+import { MediaActions } from "@/components/MediaActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -602,6 +603,13 @@ function NuevaPublicacion() {
               )}
               {origen === "contenido_propio" && uploadedUrl && uploadTipo === "video" && (
                 <video src={uploadedUrl} controls className="w-full h-full object-contain" />
+              )}
+              {((origen === "ia" && imagenUrl) || (origen === "contenido_propio" && uploadedUrl)) && !regeneratingImg && (
+                <MediaActions
+                  url={(origen === "ia" ? imagenUrl : uploadedUrl)!}
+                  caption={`${equipo} · ${angulo}`}
+                  className="absolute top-2 right-2"
+                />
               )}
               {regeneratingImg && (
                 <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
