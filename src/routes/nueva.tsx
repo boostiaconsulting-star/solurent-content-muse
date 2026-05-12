@@ -568,7 +568,7 @@ function NuevaPublicacion() {
         <Card>
           <CardHeader><CardTitle>Aprobar contenido</CardTitle></CardHeader>
           <CardContent className="space-y-5">
-            <div className="rounded-xl overflow-hidden border bg-muted aspect-video flex items-center justify-center">
+            <div className="rounded-xl overflow-hidden border bg-muted aspect-video flex items-center justify-center relative">
               {origen === "ia" && imagenUrl && (
                 <img src={imagenUrl} alt="Generado" className="w-full h-full object-cover" />
               )}
@@ -578,7 +578,49 @@ function NuevaPublicacion() {
               {origen === "contenido_propio" && uploadedUrl && uploadTipo === "video" && (
                 <video src={uploadedUrl} controls className="w-full h-full object-contain" />
               )}
+              {regeneratingImg && (
+                <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm">Regenerando imagen…</p>
+                </div>
+              )}
             </div>
+
+            {/* Chat de instrucciones para la imagen (solo IA) */}
+            {origen === "ia" && (
+              <div className="rounded-xl border p-4 space-y-3 bg-muted/30">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Ajustar imagen
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Describe qué cambiar (ej: "muestra el equipo en una obra de construcción", "fondo más oscuro", "acerca el plano"). Si seleccionaste imágenes en Biblioteca, se usan como referencia visual del equipo real.
+                </p>
+                <div className="flex gap-2">
+                  <Textarea
+                    rows={2}
+                    placeholder="Instrucciones para regenerar la imagen…"
+                    value={imgInstrucciones}
+                    onChange={(e) => setImgInstrucciones(e.target.value)}
+                    disabled={regeneratingImg}
+                  />
+                  <Button
+                    onClick={regenerarImagen}
+                    disabled={regeneratingImg}
+                    className="self-stretch"
+                  >
+                    {regeneratingImg ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" /> Regenerar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Tabs defaultValue={redes[0]}>
               <TabsList>{redes.map((r) => <TabsTrigger key={r} value={r}>{r}</TabsTrigger>)}</TabsList>
               {redes.map((r) => (
