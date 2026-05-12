@@ -187,5 +187,3 @@ export function EditPublicacionDialog({
   );
 }
 
-// Ref module-scoped para evitar re-init del state en cada render cuando no cambia la publicación.
-const lastIdRef: { current: string | null } = { current: null };
