@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2 } from "lucide-react";
+import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2, Pencil } from "lucide-react";
 import { MediaActions } from "@/components/MediaActions";
+import { EditPublicacionDialog } from "@/components/EditPublicacionDialog";
 import { useServerFn } from "@tanstack/react-start";
 import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ function Index() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<Publicacion | null>(null);
   const [toReschedule, setToReschedule] = useState<Publicacion | null>(null);
+  const [toEdit, setToEdit] = useState<Publicacion | null>(null);
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
@@ -219,6 +221,10 @@ function Index() {
                       )}
                       Publicar ahora
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setToEdit(p)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openReschedule(p)}>
                       <CalendarCog className="h-4 w-4 mr-2" />
                       {p.fecha_programada ? "Reprogramar" : "Programar"}
@@ -256,6 +262,12 @@ function Index() {
           ))}
         </div>
       )}
+
+      <EditPublicacionDialog
+        publicacion={toEdit}
+        onClose={() => setToEdit(null)}
+        onSaved={(updated) => setItems((prev) => prev.map((x) => x.id === updated.id ? updated : x))}
+      />
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>

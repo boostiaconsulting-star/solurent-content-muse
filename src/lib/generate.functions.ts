@@ -25,7 +25,27 @@ const REDES_GUIDE: Record<string, string> = {
     "Título-gancho corto al inicio + descripción breve (máx 100 palabras). 3-5 hashtags al final. Tono dinámico y directo.",
 };
 
-function buildPrompt(data: GenInput, withReference: boolean) {
+type BrandCtx = { colors?: Record<string, string> | null; logo_url?: string | null } | null;
+
+async function loadBranding(): Promise<BrandCtx> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("branding").select("colors, logo_url").eq("id", "default").maybeSingle();
+    return (data ?? null) as BrandCtx;
+  } catch { return null; }
+}
+
+function brandBlock(brand: BrandCtx): string {
+  if (!brand) return "";
+  const c = brand.colors ?? {};
+  const palette = Object.entries(c).filter(([, v]) => !!v).map(([k, v]) => `${k} ${v}`).join(", ");
+  if (!palette) return "";
+  return `\n\nIDENTIDAD DE MARCA SOLURENT (respeta esta paleta en la imagen):
+Paleta: ${palette}.
+Usa estos colores en luces, props, fondos o gráficos sutiles para que la imagen se sienta de la marca. No incluyas el logo en la imagen, solo respeta el estilo cromático.`;
+}
+
+function buildPrompt(data: GenInput, withReference: boolean, brand: BrandCtx) {
   const base = `Imagen publicitaria profesional para redes sociales de Solurent (renta de equipos industriales).
 Equipo/producto: ${data.equipo || "equipo industrial"}
 Ángulo de comunicación: ${data.angulo}
@@ -34,7 +54,7 @@ Idea/mensaje: ${data.idea}
 ${data.contextoExtra ? `Contexto extra: ${data.contextoExtra}` : ""}
 ${data.instrucciones ? `Instrucciones específicas del usuario: ${data.instrucciones}` : ""}
 
-Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, calidad 4K.`;
+Estilo: fotografía comercial premium, iluminación natural, composición limpia, alto contraste, sin texto sobre la imagen, calidad 4K.${brandBlock(brand)}`;
 
   if (withReference) {
     return `${base}
@@ -69,13 +89,13 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
 }
 
 /** Image-to-image / reference-aware generation via Lovable AI Nano Banana. */
-async function generateWithNanoBanana(data: GenInput): Promise<string> {
+async function generateWithNanoBanana(data: GenInput, brand: BrandCtx): Promise<string> {
   const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurada");
 
   const refs = (data.referenceImageUrls ?? []).slice(0, 4); // cap a 4 referencias
   const content: Array<Record<string, unknown>> = [
-    { type: "text", text: buildPrompt(data, refs.length > 0) },
+    { type: "text", text: buildPrompt(data, refs.length > 0, brand) },
     ...refs.map((url) => ({ type: "image_url", image_url: { url } })),
   ];
 
@@ -114,7 +134,7 @@ async function generateWithNanoBanana(data: GenInput): Promise<string> {
 }
 
 /** Text-only generation via Higgsfield Soul. */
-async function generateWithHiggsfield(data: GenInput): Promise<string> {
+async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<string> {
   const HF_KEY = process.env.HIGGSFIELD_API_KEY;
   const HF_SECRET = process.env.HIGGSFIELD_API_SECRET;
   if (!HF_KEY || !HF_SECRET) throw new Error("HIGGSFIELD_API_KEY / HIGGSFIELD_API_SECRET no configuradas");
@@ -123,7 +143,7 @@ async function generateWithHiggsfield(data: GenInput): Promise<string> {
   const res = await fetch("https://platform.higgsfield.ai/higgsfield-ai/soul/standard", {
     method: "POST",
     headers: { Authorization: authHeader, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ prompt: buildPrompt(data, false), aspect_ratio: "1:1", resolution: "1080p" }),
+    body: JSON.stringify({ prompt: buildPrompt(data, false, brand), aspect_ratio: "1:1", resolution: "1080p" }),
   });
 
   if (!res.ok) {
@@ -169,12 +189,11 @@ async function generateWithHiggsfield(data: GenInput): Promise<string> {
 export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
+    const brand = await loadBranding();
     const hasRefs = (data.referenceImageUrls ?? []).length > 0;
-    // Con referencias visuales o instrucciones específicas → Nano Banana (image-to-image / edición)
-    // Sin referencias → Higgsfield Soul (mejor calidad fotográfica pura text-to-image)
     const url = hasRefs
-      ? await generateWithNanoBanana(data)
-      : await generateWithHiggsfield(data);
+      ? await generateWithNanoBanana(data, brand)
+      : await generateWithHiggsfield(data, brand);
     return { url };
   });
 
