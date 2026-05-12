@@ -559,8 +559,9 @@ function NuevaPublicacion() {
               ))}
             </Tabs>
             <div className="flex justify-between">
-              <Button variant="outline" onClick={origen === "ia" ? generarIA : generarCopyPropio} disabled={generating}>
-                <RefreshCw className="h-4 w-4 mr-2" /> {origen === "ia" ? "Regenerar" : "Regenerar copy"}
+              <Button variant="outline" onClick={regenerarCopy} disabled={generating}>
+                {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Regenerar copy
               </Button>
               <Button onClick={aprobarYProgramar} className="bg-success hover:bg-success/90 text-success-foreground">
                 Aprobar y programar <ArrowRight className="h-4 w-4 ml-2" />
