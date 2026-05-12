@@ -121,20 +121,36 @@ function Index() {
 
   const confirmReschedule = async () => {
     if (!toReschedule || !fecha) return;
+    const p = toReschedule;
     const iso = new Date(`${fecha}T${hora}:00`).toISOString();
     const { error } = await supabase
       .from("publicaciones")
       .update({ fecha_programada: iso, estado: "aprobado" })
-      .eq("id", toReschedule.id);
+      .eq("id", p.id);
     if (error) {
       toast.error("No se pudo reprogramar");
-    } else {
-      toast.success("Publicación reprogramada");
-      setItems((prev) => prev.map((x) =>
-        x.id === toReschedule.id ? { ...x, fecha_programada: iso, estado: "aprobado" } : x
-      ));
+      setToReschedule(null);
+      return;
     }
+    setItems((prev) => prev.map((x) =>
+      x.id === p.id ? { ...x, fecha_programada: iso, estado: "aprobado" } : x
+    ));
     setToReschedule(null);
+
+    try {
+      const payload = buildMakePayload({
+        imagen_url: p.imagen_url,
+        contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
+        copyRaw: (p.copy ?? {}) as Record<string, string>,
+        redesRaw: p.redes ?? [],
+        fecha: iso,
+        equipo: p.equipo ?? "",
+      });
+      await sendToMakeFn({ data: payload });
+      toast.success("Publicación programada y enviada a Make");
+    } catch (e) {
+      toast.error("Programada, pero falló envío a Make: " + (e as Error).message);
+    }
   };
 
   return (
