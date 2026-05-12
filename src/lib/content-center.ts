@@ -13,6 +13,9 @@ export type Publicacion = {
   redes: string[] | null;
   copy: Record<string, string> | null;
   imagen_url: string | null;
+  contenido_url: string | null;
+  contenido_tipo: string | null;
+  origen: string | null;
   fecha_programada: string | null;
   estado: string;
   created_at: string;
