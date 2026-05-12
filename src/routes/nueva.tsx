@@ -177,14 +177,26 @@ function NuevaPublicacion() {
   const callImage = useServerFn(generateImage);
   const callCopies = useServerFn(generateCopies);
 
-  const buildInput = () => ({
-    equipo,
-    idea: origen === "ia" ? idea : (contextoExtra || idea),
-    angulo,
-    formato: origen === "ia" ? formato : (uploadTipo === "video" ? "Video" : "Imagen"),
-    redes,
-    contextoExtra: origen === "contenido_propio" ? contextoExtra : undefined,
-  });
+  const buildInput = (extra?: { instrucciones?: string }) => {
+    // Imágenes de referencia: archivos seleccionados de Biblioteca (solo imágenes) + upload propio si es imagen
+    const refsBiblio = biblioteca
+      .filter((a) => contexto.includes(a.id) && a.tipo !== "pdf")
+      .map((a) => a.url);
+    const refsUpload =
+      origen === "contenido_propio" && uploadedUrl && uploadTipo === "imagen" ? [uploadedUrl] : [];
+    const referenceImageUrls = [...refsBiblio, ...refsUpload];
+
+    return {
+      equipo,
+      idea: origen === "ia" ? idea : (contextoExtra || idea),
+      angulo,
+      formato: origen === "ia" ? formato : (uploadTipo === "video" ? "Video" : "Imagen"),
+      redes,
+      contextoExtra: origen === "contenido_propio" ? contextoExtra : undefined,
+      referenceImageUrls: referenceImageUrls.length ? referenceImageUrls : undefined,
+      instrucciones: extra?.instrucciones,
+    };
+  };
 
   const runCopies = async () => {
     try {
