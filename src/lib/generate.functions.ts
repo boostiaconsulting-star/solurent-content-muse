@@ -222,6 +222,37 @@ export const generateImage = createServerFn({ method: "POST" })
     return { url };
   });
 
+// === DEBUG TEMPORAL: listar modelos disponibles en la API key de Gemini ===
+// Borrar después de validar el nombre correcto del modelo.
+export const listGeminiModels = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+    if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY no configurada");
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GOOGLE_API_KEY}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(`ListModels ${res.status}: ${JSON.stringify(json).slice(0, 400)}`);
+    const all = (json.models ?? []) as Array<{
+      name: string;
+      displayName?: string;
+      supportedGenerationMethods?: string[];
+      description?: string;
+    }>;
+    const imageish = all.filter((m) =>
+      m.name?.toLowerCase().includes("image") ||
+      m.displayName?.toLowerCase().includes("image") ||
+      m.description?.toLowerCase().includes("image generation"),
+    );
+    return {
+      total: all.length,
+      imageModels: imageish.map((m) => ({
+        name: m.name,
+        displayName: m.displayName,
+        methods: m.supportedGenerationMethods ?? [],
+      })),
+      allNames: all.map((m) => m.name),
+    };
+  });
+
 export const generateCopies = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
