@@ -140,9 +140,9 @@ async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<
   if (!imageUrl) {
     if (!statusUrl && requestId) statusUrl = `https://platform.higgsfield.ai/requests/${requestId}/status`;
     if (!statusUrl) throw new Error("Higgsfield no devolvió status_url ni request_id");
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 2500));
+      await new Promise((r) => setTimeout(r, 3000));
       const sres = await fetch(statusUrl, { headers: { Authorization: authHeader, Accept: "application/json" } });
       if (!sres.ok) continue;
       const sjson = await sres.json();
