@@ -4,8 +4,6 @@ import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send,
 import { MediaActions } from "@/components/MediaActions";
 import { EditPublicacionDialog } from "@/components/EditPublicacionDialog";
 import { useServerFn } from "@tanstack/react-start";
-// Fallback Make.com (mantener comentado por si necesitamos volver):
-// import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
 import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 import { toast } from "sonner";
 
@@ -51,7 +49,6 @@ function Index() {
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
-  // const sendToMakeFn = useServerFn(sendToMake); // fallback Make.com
   const publishToMetaFn = useServerFn(publishToMeta);
 
   const publicarAhora = async (p: Publicacion) => {
@@ -66,8 +63,6 @@ function Index() {
         fecha: new Date().toISOString(),
         equipo: p.equipo ?? "",
       });
-      // Fallback Make.com:
-      // await sendToMakeFn({ data: payload });
       const res = await publishToMetaFn({ data: payload });
       if (!res.ok) {
         const errs = res.results
@@ -155,16 +150,6 @@ function Index() {
     // Programación guardada en Supabase. La publicación efectiva a Meta la dispara
     // el botón "Publicar ahora" o un cron (pendiente de configurar) que recorra
     // publicaciones con fecha_programada <= now y llame a publishToMeta.
-    // Fallback Make.com (manejaba el delay y publicaba al llegar la fecha):
-    // const payload = buildMakePayload({
-    //   imagen_url: p.imagen_url,
-    //   contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
-    //   copyRaw: (p.copy ?? {}) as Record<string, string>,
-    //   redesRaw: p.redes ?? [],
-    //   fecha: iso,
-    //   equipo: p.equipo ?? "",
-    // });
-    // await sendToMakeFn({ data: payload });
     toast.success("Publicación programada");
   };
 

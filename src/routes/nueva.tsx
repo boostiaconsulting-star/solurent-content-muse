@@ -23,8 +23,6 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies, listGeminiModels } from "@/lib/generate.functions";
-// Fallback Make.com (mantener comentado por si necesitamos volver):
-// import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
 import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 
 export const Route = createFileRoute("/nueva")({
@@ -46,7 +44,6 @@ const IMG_MAX = 50 * 1024 * 1024;
 
 function NuevaPublicacion() {
   const navigate = useNavigate();
-  // const sendToMakeFn = useServerFn(sendToMake); // fallback Make.com
   const publishToMetaFn = useServerFn(publishToMeta);
   const listGeminiModelsFn = useServerFn(listGeminiModels);
   const [origen, setOrigen] = useState<Origen>("ia");
@@ -324,8 +321,6 @@ function NuevaPublicacion() {
           fecha: fechaProgramada,
           equipo,
         });
-        // Fallback Make.com:
-        // await sendToMakeFn({ data: metaPayload });
         const res = await publishToMetaFn({ data: metaPayload });
         if (!res.ok) {
           const errs = res.results

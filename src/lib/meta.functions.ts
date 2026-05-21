@@ -118,8 +118,8 @@ async function publishFacebook(opts: {
 }
 
 /**
- * Construye el MetaPayload desde el copy crudo (mismas keys que MakePayload).
- * Reutilizable desde las rutas para no duplicar normalización.
+ * Construye el MetaPayload desde el copy crudo. Reutilizable desde las rutas
+ * para no duplicar normalización (keys de red, filtrado a redes Meta).
  */
 const REDES_KEYS = ["facebook", "instagram", "tiktok", "youtube"] as const;
 type RedKey = (typeof REDES_KEYS)[number];
