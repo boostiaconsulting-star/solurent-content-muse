@@ -8,7 +8,7 @@ type GenInput = {
   formato: string;
   redes: string[];
   contextoExtra?: string;
-  /** Public URLs of reference images. If provided, generation uses image-to-image (Nano Banana). */
+  /** Public URLs of reference images. If provided, generation uses Higgsfield image-to-image. */
   referenceImageUrls?: string[];
   /** Free-form additional instructions from the user (chat in step 4). */
   instrucciones?: string;
@@ -88,62 +88,27 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
   return pub.publicUrl;
 }
 
-/** Image-to-image / reference-aware generation via Lovable AI Nano Banana. */
-async function generateWithNanoBanana(data: GenInput, brand: BrandCtx): Promise<string> {
-  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurada");
-
-  const refs = (data.referenceImageUrls ?? []).slice(0, 4); // cap a 4 referencias
-  const content: Array<Record<string, unknown>> = [
-    { type: "text", text: buildPrompt(data, refs.length > 0, brand) },
-    ...refs.map((url) => ({ type: "image_url", image_url: { url } })),
-  ];
-
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content }],
-      modalities: ["image", "text"],
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    if (res.status === 429) throw new Error("Límite de Lovable AI alcanzado, intenta de nuevo en un momento.");
-    if (res.status === 402) throw new Error("Sin créditos de Lovable AI. Agrega saldo en Settings → Workspace → Usage.");
-    throw new Error(`Error generando imagen (${res.status}): ${t}`);
-  }
-
-  const json = await res.json();
-  const dataUrl: string | undefined = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!dataUrl || !dataUrl.startsWith("data:")) {
-    throw new Error("Nano Banana no devolvió una imagen.");
-  }
-
-  const [meta, b64] = dataUrl.split(",");
-  const mime = meta.match(/data:([^;]+)/)?.[1] || "image/png";
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return uploadToBucket(bytes, mime, data.equipo);
-}
-
-/** Text-only generation via Higgsfield Soul. */
+/** Generación vía Higgsfield Soul. Soporta text-to-image y image-to-image (referencia opcional). */
 async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<string> {
-  const HF_KEY = process.env.HIGGSFIELD_API_KEY;
-  const HF_SECRET = process.env.HIGGSFIELD_API_SECRET;
-  if (!HF_KEY || !HF_SECRET) throw new Error("HIGGSFIELD_API_KEY / HIGGSFIELD_API_SECRET no configuradas");
+  const HF_KEY = process.env.Higgsfield_API_ID;
+  const HF_SECRET = process.env.Higgsfield_Key_Secret;
+  if (!HF_KEY || !HF_SECRET) throw new Error("Higgsfield_API_ID / Higgsfield_Key_Secret no configuradas");
+
+  const refs = (data.referenceImageUrls ?? []).slice(0, 1); // Soul acepta 1 imagen de referencia
+  const hasRefs = refs.length > 0;
+
+  const body: Record<string, unknown> = {
+    prompt: buildPrompt(data, hasRefs, brand),
+    aspect_ratio: "1:1",
+    resolution: "1080p",
+  };
+  if (hasRefs) body.input_images = refs;
 
   const authHeader = `Key ${HF_KEY}:${HF_SECRET}`;
   const res = await fetch("https://platform.higgsfield.ai/higgsfield-ai/soul/standard", {
     method: "POST",
     headers: { Authorization: authHeader, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ prompt: buildPrompt(data, false, brand), aspect_ratio: "1:1", resolution: "1080p" }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -190,10 +155,7 @@ export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
     const brand = await loadBranding();
-    const hasRefs = (data.referenceImageUrls ?? []).length > 0;
-    const url = hasRefs
-      ? await generateWithNanoBanana(data, brand)
-      : await generateWithHiggsfield(data, brand);
+    const url = await generateWithHiggsfield(data, brand);
     return { url };
   });
 
