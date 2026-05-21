@@ -611,7 +611,7 @@ function NuevaPublicacion() {
           <CardContent className="py-20 flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <h3 className="text-lg font-medium">
-              {origen === "ia" ? "Generando con Higgsfield…" : "Generando copy para cada red…"}
+              {origen === "ia" ? "Generando con Gemini (Nano Banana)…" : "Generando copy para cada red…"}
             </h3>
             <p className="text-sm text-muted-foreground">Esto puede tomar unos segundos.</p>
           </CardContent>
