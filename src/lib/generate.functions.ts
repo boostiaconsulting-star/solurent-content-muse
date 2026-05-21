@@ -162,7 +162,7 @@ export const generateImage = createServerFn({ method: "POST" })
 export const generateCopies = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? process.env.Anthropic_API_Key;
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY no configurada");
 
     const redesBlock = data.redes
