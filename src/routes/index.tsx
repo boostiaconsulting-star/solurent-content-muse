@@ -4,7 +4,9 @@ import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send,
 import { MediaActions } from "@/components/MediaActions";
 import { EditPublicacionDialog } from "@/components/EditPublicacionDialog";
 import { useServerFn } from "@tanstack/react-start";
-import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
+// Fallback Make.com (mantener comentado por si necesitamos volver):
+// import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
+import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -49,13 +51,14 @@ function Index() {
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
-  const sendToMakeFn = useServerFn(sendToMake);
+  // const sendToMakeFn = useServerFn(sendToMake); // fallback Make.com
+  const publishToMetaFn = useServerFn(publishToMeta);
 
   const publicarAhora = async (p: Publicacion) => {
     if (!confirm(`¿Publicar "${p.equipo || "esta publicación"}" ahora? Se cancelará la programación.`)) return;
     setPublishingId(p.id);
     try {
-      const payload = buildMakePayload({
+      const payload = buildMetaPayload({
         imagen_url: p.imagen_url,
         contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
         copyRaw: (p.copy ?? {}) as Record<string, string>,
@@ -63,7 +66,16 @@ function Index() {
         fecha: new Date().toISOString(),
         equipo: p.equipo ?? "",
       });
-      await sendToMakeFn({ data: payload });
+      // Fallback Make.com:
+      // await sendToMakeFn({ data: payload });
+      const res = await publishToMetaFn({ data: payload });
+      if (!res.ok) {
+        const errs = res.results
+          .filter((r) => !r.ok && !r.skipped)
+          .map((r) => `${r.network}: ${r.error}`)
+          .join(" · ");
+        throw new Error(errs || "Meta rechazó la publicación");
+      }
       const { error } = await supabase
         .from("publicaciones")
         .update({ fecha_programada: null, estado: "publicado" })
@@ -72,7 +84,8 @@ function Index() {
       setItems((prev) => prev.map((x) =>
         x.id === p.id ? { ...x, fecha_programada: null, estado: "publicado" } : x
       ));
-      toast.success("Publicado y programación cancelada");
+      const pubIds = res.results.filter((r) => r.ok).map((r) => r.network).join(", ");
+      toast.success(`Publicado en ${pubIds}`);
     } catch (e) {
       toast.error("No se pudo publicar: " + (e as Error).message);
     } finally {
@@ -139,20 +152,20 @@ function Index() {
     ));
     setToReschedule(null);
 
-    try {
-      const payload = buildMakePayload({
-        imagen_url: p.imagen_url,
-        contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
-        copyRaw: (p.copy ?? {}) as Record<string, string>,
-        redesRaw: p.redes ?? [],
-        fecha: iso,
-        equipo: p.equipo ?? "",
-      });
-      await sendToMakeFn({ data: payload });
-      toast.success("Publicación programada y enviada a Make");
-    } catch (e) {
-      toast.error("Programada, pero falló envío a Make: " + (e as Error).message);
-    }
+    // Programación guardada en Supabase. La publicación efectiva a Meta la dispara
+    // el botón "Publicar ahora" o un cron (pendiente de configurar) que recorra
+    // publicaciones con fecha_programada <= now y llame a publishToMeta.
+    // Fallback Make.com (manejaba el delay y publicaba al llegar la fecha):
+    // const payload = buildMakePayload({
+    //   imagen_url: p.imagen_url,
+    //   contenido_tipo: (p.contenido_tipo === "video" ? "video" : "image"),
+    //   copyRaw: (p.copy ?? {}) as Record<string, string>,
+    //   redesRaw: p.redes ?? [],
+    //   fecha: iso,
+    //   equipo: p.equipo ?? "",
+    // });
+    // await sendToMakeFn({ data: payload });
+    toast.success("Publicación programada");
   };
 
   return (

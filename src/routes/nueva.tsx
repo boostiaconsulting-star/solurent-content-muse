@@ -23,7 +23,9 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
-import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
+// Fallback Make.com (mantener comentado por si necesitamos volver):
+// import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
+import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -44,7 +46,8 @@ const IMG_MAX = 50 * 1024 * 1024;
 
 function NuevaPublicacion() {
   const navigate = useNavigate();
-  const sendToMakeFn = useServerFn(sendToMake);
+  // const sendToMakeFn = useServerFn(sendToMake); // fallback Make.com
+  const publishToMetaFn = useServerFn(publishToMeta);
   const [origen, setOrigen] = useState<Origen>("ia");
   const [step, setStep] = useState(1);
 
@@ -298,26 +301,52 @@ function NuevaPublicacion() {
         .insert(contexto.map((archivo_id) => ({ publicacion_id: data.id, archivo_id })));
     }
 
-    if (fechaProgramada) {
+    // Si la fecha está en el pasado o dentro de los próximos 2 min: publica ahora a Meta.
+    // Si es futura: solo guarda; un cron (pendiente) recogerá publicaciones vencidas.
+    const tipo: "image" | "video" =
+      origen === "contenido_propio" && uploadTipo === "video" ? "video" : "image";
+    const debePublicarYa =
+      fechaProgramada && new Date(fechaProgramada).getTime() <= Date.now() + 2 * 60_000;
+
+    if (debePublicarYa && tipo === "image") {
       try {
-        const payload = buildMakePayload({
+        const metaPayload = buildMetaPayload({
           imagen_url: origen === "ia" ? imagenUrl : uploadedUrl,
-          contenido_tipo: origen === "contenido_propio" && uploadTipo === "video" ? "video" : "image",
+          contenido_tipo: tipo,
           copyRaw: copyByRed,
           redesRaw: redes,
           fecha: fechaProgramada,
           equipo,
         });
-        await sendToMakeFn({ data: payload });
+        // Fallback Make.com:
+        // await sendToMakeFn({ data: metaPayload });
+        const res = await publishToMetaFn({ data: metaPayload });
+        if (!res.ok) {
+          const errs = res.results
+            .filter((r) => !r.ok && !r.skipped)
+            .map((r) => `${r.network}: ${r.error}`)
+            .join(" · ");
+          throw new Error(errs || "Meta rechazó la publicación");
+        }
+        if (data) {
+          await supabase
+            .from("publicaciones")
+            .update({ estado: "publicado", fecha_programada: null })
+            .eq("id", data.id);
+        }
+        setDone(true);
+        const pubIds = res.results.filter((r) => r.ok).map((r) => r.network).join(", ");
+        toast.success(`Publicado en ${pubIds}`);
+        return;
       } catch (e) {
-        toast.error("Guardado, pero falló el webhook: " + (e as Error).message);
+        toast.error("Guardado, pero falló publicación en Meta: " + (e as Error).message);
         setDone(true);
         return;
       }
     }
 
     setDone(true);
-    toast.success("Programado y enviado a Make");
+    toast.success(fechaProgramada ? "Programado" : "Guardado");
   };
 
   const setQuickDate = (d: Date, h = "09:00") => {
