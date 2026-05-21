@@ -166,7 +166,7 @@ export function buildMetaPayload(input: {
 export const publishToMeta = createServerFn({ method: "POST" })
   .inputValidator((d: MetaPayload) => d)
   .handler(async ({ data }): Promise<MetaResult> => {
-    const token = process.env.META_ACCESS_TOKEN;
+    const token = process.env.META_ACCESS_TOKEN ?? process.env.META_TOKEN;
     const igUserId = process.env.META_IG_USER_ID;
     const pageId = process.env.META_FB_PAGE_ID;
     if (!token) throw new Error("META_ACCESS_TOKEN no configurado");
