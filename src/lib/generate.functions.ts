@@ -118,7 +118,7 @@ async function generateWithGemini(data: GenInput, brand: BrandCtx): Promise<stri
     parts.push({ inlineData: { mimeType: refMime, data: refBuf.toString("base64") } });
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_API_KEY}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GOOGLE_API_KEY}`;
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
