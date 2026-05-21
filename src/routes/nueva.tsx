@@ -23,7 +23,7 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies, listGeminiModels } from "@/lib/generate.functions";
-import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
+import { publishToMeta, buildMetaPayload, debugMetaToken } from "@/lib/meta.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -46,6 +46,7 @@ function NuevaPublicacion() {
   const navigate = useNavigate();
   const publishToMetaFn = useServerFn(publishToMeta);
   const listGeminiModelsFn = useServerFn(listGeminiModels);
+  const debugMetaTokenFn = useServerFn(debugMetaToken);
   const [origen, setOrigen] = useState<Origen>("ia");
   const [step, setStep] = useState(1);
 
@@ -53,6 +54,10 @@ function NuevaPublicacion() {
   const [debugModels, setDebugModels] = useState<null | { total: number; imageModels: Array<{ name: string; displayName?: string; methods: string[] }>; allNames: string[] }>(null);
   const [debugLoading, setDebugLoading] = useState(false);
   const [debugError, setDebugError] = useState<string | null>(null);
+  // DEBUG temporal — introspectar token Meta
+  const [debugMeta, setDebugMeta] = useState<unknown>(null);
+  const [debugMetaLoading, setDebugMetaLoading] = useState(false);
+  const [debugMetaError, setDebugMetaError] = useState<string | null>(null);
 
   // Common
   const [equipo, setEquipo] = useState("");
@@ -415,6 +420,25 @@ function NuevaPublicacion() {
               {debugLoading ? "Listando modelos…" : "🐛 Listar modelos Gemini"}
             </Button>
             {debugModels && <span className="text-xs text-muted-foreground">total: {debugModels.total} · imageModels: {debugModels.imageModels.length}</span>}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={debugMetaLoading}
+              onClick={async () => {
+                setDebugMetaLoading(true);
+                setDebugMetaError(null);
+                try {
+                  const r = await debugMetaTokenFn();
+                  setDebugMeta(r);
+                } catch (e) {
+                  setDebugMetaError((e as Error).message);
+                } finally {
+                  setDebugMetaLoading(false);
+                }
+              }}
+            >
+              {debugMetaLoading ? "Inspeccionando token…" : "🔑 Inspeccionar token Meta"}
+            </Button>
           </div>
           {debugError && <p className="text-xs text-red-600 break-all">{debugError}</p>}
           {debugModels && (
@@ -427,6 +451,13 @@ function NuevaPublicacion() {
                 <summary className="cursor-pointer font-medium">Todos los nombres ({debugModels.allNames.length})</summary>
                 <pre className="bg-muted p-2 rounded overflow-x-auto">{debugModels.allNames.join("\n")}</pre>
               </details>
+            </div>
+          )}
+          {debugMetaError && <p className="text-xs text-red-600 break-all">{debugMetaError}</p>}
+          {debugMeta != null && (
+            <div className="text-xs">
+              <div className="font-medium">Meta token debug:</div>
+              <pre className="bg-muted p-2 rounded overflow-x-auto max-h-96">{JSON.stringify(debugMeta, null, 2)}</pre>
             </div>
           )}
         </CardContent>
