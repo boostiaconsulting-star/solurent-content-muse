@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/lib/content-center";
+import { fetchBranding } from "@/lib/db.functions";
 import { analyzeBranding } from "@/lib/branding.functions";
 
 export const Route = createFileRoute("/branding")({
@@ -30,6 +30,7 @@ type BrandRow = {
 
 function BrandingPage() {
   const analyze = useServerFn(analyzeBranding);
+  const fetchBrandingFn = useServerFn(fetchBranding);
   const [website, setWebsite] = useState("https://www.solurent.mx");
   const [brand, setBrand] = useState<BrandRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +38,7 @@ function BrandingPage() {
 
   const reload = async () => {
     setLoading(true);
-    const { data } = await supabase.from("branding").select("*").eq("id", "default").maybeSingle();
+    const data = await fetchBrandingFn();
     if (data) {
       setBrand(data as BrandRow);
       if (data.website_url) setWebsite(data.website_url);

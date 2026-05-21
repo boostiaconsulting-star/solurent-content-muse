@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Trash2, Upload, FileText, Image as ImageIcon, Eye, ExternalLink } from "lucide-react";
@@ -8,7 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { supabase, type Archivo, CATEGORIAS } from "@/lib/content-center";
+import { type Archivo, CATEGORIAS } from "@/lib/content-center";
+import {
+  fetchBiblioteca,
+  uploadBibliotecaFile,
+  deleteBibliotecaFile,
+} from "@/lib/db.functions";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -30,12 +36,12 @@ function Biblioteca() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<Archivo | null>(null);
 
+  const fetchBibliotecaFn = useServerFn(fetchBiblioteca);
+  const uploadBibliotecaFileFn = useServerFn(uploadBibliotecaFile);
+  const deleteBibliotecaFileFn = useServerFn(deleteBibliotecaFile);
+
   const load = () => {
-    supabase
-      .from("biblioteca")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }: { data: Archivo[] | null }) => setItems((data ?? []) as Archivo[]));
+    fetchBibliotecaFn().then((data) => setItems(data ?? []));
   };
   useEffect(load, []);
 
@@ -44,34 +50,22 @@ function Biblioteca() {
     if (!arr.length) return;
     setUploading(true);
     try {
-      // Ensure bucket exists (best-effort).
-      try {
-        await supabase.storage.createBucket("biblioteca", { public: true });
-      } catch {
-        /* ignore if exists */
-      }
-
       for (const file of arr) {
         if (!ACCEPTED.includes(file.type)) {
           toast.error(`Tipo no permitido: ${file.name}`);
           continue;
         }
-        const ext = file.name.split(".").pop();
-        const path = `${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from("biblioteca").upload(path, file);
-        if (error) {
-          toast.error("Error subiendo " + file.name + ": " + error.message);
-          continue;
-        }
-        const { data: pub } = supabase.storage.from("biblioteca").getPublicUrl(path);
+        const ext = file.name.split(".").pop() ?? "bin";
         const tipo = file.type === "application/pdf" ? "pdf" : "imagen";
-        const { error: insErr } = await supabase.from("biblioteca").insert({
-          nombre: file.name,
-          tipo,
-          categoria,
-          url: pub.publicUrl,
-        });
-        if (insErr) toast.error(insErr.message);
+        try {
+          const ab = await file.arrayBuffer();
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+          await uploadBibliotecaFileFn({
+            data: { nombre: file.name, tipo, categoria, fileBase64: b64, mimeType: file.type, ext },
+          });
+        } catch (e) {
+          toast.error("Error subiendo " + file.name + ": " + (e as Error).message);
+        }
       }
       toast.success("Archivos subidos");
       load();
@@ -81,12 +75,13 @@ function Biblioteca() {
   };
 
   const remove = async (a: Archivo) => {
-    await supabase.from("biblioteca").delete().eq("id", a.id);
-    // try to remove file too
-    const path = a.url.split("/biblioteca/")[1];
-    if (path) await supabase.storage.from("biblioteca").remove([path]);
-    toast.success("Eliminado");
-    load();
+    try {
+      await deleteBibliotecaFileFn({ data: { id: a.id, url: a.url } });
+      toast.success("Eliminado");
+      load();
+    } catch (e) {
+      toast.error("No se pudo eliminar: " + (e as Error).message);
+    }
   };
 
   return (

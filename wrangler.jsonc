@@ -4,4 +4,14 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  "r2_buckets": [
+    {
+      "binding": "BIBLIOTECA",
+      "bucket_name": "biblioteca"
+    },
+    {
+      "binding": "CONTENIDO_PROPIO",
+      "bucket_name": "contenido-propio"
+    }
+  ]
 }

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { dbUpsertBranding } from "@/db/client";
 
 export type Brand = {
   website_url: string | null;
@@ -97,18 +97,14 @@ export const analyzeBranding = createServerFn({ method: "POST" })
     const fonts = { heading: parsed.font_heading, body: parsed.font_body };
 
     // 3) Save singleton
-    const { error } = await supabaseAdmin
-      .from("branding")
-      .upsert({
-        id: "default",
-        website_url: url,
-        logo_url,
-        colors,
-        fonts,
-        raw: parsed,
-        updated_at: new Date().toISOString(),
-      });
-    if (error) throw new Error("No se pudo guardar branding: " + error.message);
+    await dbUpsertBranding({
+      id: "default",
+      website_url: url,
+      logo_url,
+      colors,
+      fonts,
+      raw: parsed,
+    });
 
     return { website_url: url, logo_url, colors, fonts };
   });

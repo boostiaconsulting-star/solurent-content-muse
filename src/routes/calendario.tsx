@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabase, type Publicacion } from "@/lib/content-center";
+import { type Publicacion } from "@/lib/content-center";
+import { fetchPublicacionesProgramadas } from "@/lib/db.functions";
 
 export const Route = createFileRoute("/calendario")({
   head: () => ({
@@ -16,17 +18,10 @@ export const Route = createFileRoute("/calendario")({
 });
 
 function Calendario() {
+  const fetchFn = useServerFn(fetchPublicacionesProgramadas);
   const { data: items = [] } = useQuery<Publicacion[]>({
     queryKey: ["publicaciones-calendario"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("publicaciones")
-        .select("*")
-        .not("fecha_programada", "is", null)
-        .order("fecha_programada", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Publicacion[];
-    },
+    queryFn: () => fetchFn(),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });

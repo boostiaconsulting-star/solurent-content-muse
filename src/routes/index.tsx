@@ -22,7 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase, type Publicacion } from "@/lib/content-center";
+import { type Publicacion } from "@/lib/content-center";
+import {
+  fetchPublicaciones,
+  updatePublicacion,
+  deletePublicacion,
+} from "@/lib/db.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -50,6 +55,9 @@ function Index() {
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const sendToMakeFn = useServerFn(sendToMake);
+  const updatePublicacionFn = useServerFn(updatePublicacion);
+  const deletePublicacionFn = useServerFn(deletePublicacion);
+  const fetchPublicacionesFn = useServerFn(fetchPublicaciones);
 
   const publicarAhora = async (p: Publicacion) => {
     if (!confirm(`¿Publicar "${p.equipo || "esta publicación"}" ahora? Se cancelará la programación.`)) return;
@@ -64,11 +72,7 @@ function Index() {
         equipo: p.equipo ?? "",
       });
       await sendToMakeFn({ data: payload });
-      const { error } = await supabase
-        .from("publicaciones")
-        .update({ fecha_programada: null, estado: "publicado" })
-        .eq("id", p.id);
-      if (error) throw new Error(error.message);
+      await updatePublicacionFn({ data: { id: p.id, patch: { fecha_programada: null, estado: "publicado" } } });
       setItems((prev) => prev.map((x) =>
         x.id === p.id ? { ...x, fecha_programada: null, estado: "publicado" } : x
       ));
@@ -82,14 +86,10 @@ function Index() {
 
   const reload = () => {
     setLoading(true);
-    supabase
-      .from("publicaciones")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }: { data: Publicacion[] | null }) => {
-        setItems((data ?? []) as Publicacion[]);
-        setLoading(false);
-      });
+    fetchPublicacionesFn().then((data) => {
+      setItems(data ?? []);
+      setLoading(false);
+    });
   };
 
   useEffect(() => { reload(); }, []);
@@ -111,12 +111,12 @@ function Index() {
 
   const confirmDelete = async () => {
     if (!toDelete) return;
-    const { error } = await supabase.from("publicaciones").delete().eq("id", toDelete.id);
-    if (error) {
-      toast.error("No se pudo eliminar");
-    } else {
+    try {
+      await deletePublicacionFn({ data: { id: toDelete.id } });
       toast.success("Publicación eliminada");
       setItems((prev) => prev.filter((x) => x.id !== toDelete.id));
+    } catch {
+      toast.error("No se pudo eliminar");
     }
     setToDelete(null);
   };
@@ -125,11 +125,9 @@ function Index() {
     if (!toReschedule || !fecha) return;
     const p = toReschedule;
     const iso = new Date(`${fecha}T${hora}:00`).toISOString();
-    const { error } = await supabase
-      .from("publicaciones")
-      .update({ fecha_programada: iso, estado: "aprobado" })
-      .eq("id", p.id);
-    if (error) {
+    try {
+      await updatePublicacionFn({ data: { id: p.id, patch: { fecha_programada: iso, estado: "aprobado" } } });
+    } catch {
       toast.error("No se pudo reprogramar");
       setToReschedule(null);
       return;

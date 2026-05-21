@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { supabase, type Publicacion } from "@/lib/content-center";
+import { type Publicacion } from "@/lib/content-center";
 import { generateImage } from "@/lib/generate.functions";
+import { updatePublicacion } from "@/lib/db.functions";
 
 type ChatMsg = { role: "user" | "agent"; text: string };
 
@@ -24,6 +25,7 @@ export function EditPublicacionDialog({
   onSaved: (p: Publicacion) => void;
 }) {
   const callImage = useServerFn(generateImage);
+  const updatePublicacionFn = useServerFn(updatePublicacion);
   const open = !!publicacion;
 
   const [copy, setCopy] = useState<Record<string, string>>(publicacion?.copy ?? {});
@@ -81,17 +83,18 @@ export function EditPublicacionDialog({
 
   const guardar = async () => {
     setSaving(true);
-    const { data, error } = await supabase
-      .from("publicaciones")
-      .update({ copy, imagen_url: imagenUrl })
-      .eq("id", publicacion.id)
-      .select()
-      .single();
-    setSaving(false);
-    if (error) { toast.error("No se pudo guardar: " + error.message); return; }
-    toast.success("Cambios guardados");
-    onSaved(data as Publicacion);
-    onClose();
+    try {
+      await updatePublicacionFn({
+        data: { id: publicacion.id, patch: { copy, imagen_url: imagenUrl } },
+      });
+      toast.success("Cambios guardados");
+      onSaved({ ...publicacion, copy, imagen_url: imagenUrl });
+      onClose();
+    } catch (e) {
+      toast.error("No se pudo guardar: " + (e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -20,10 +20,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
-  ANGULOS, FORMATOS, REDES, type Archivo, supabase,
+  ANGULOS, FORMATOS, REDES, type Archivo,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
 import { sendToMake, buildMakePayload } from "@/lib/webhook.functions";
+import {
+  fetchBiblioteca,
+  uploadContenidoPropio,
+  createPublicacion,
+} from "@/lib/db.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -71,6 +76,10 @@ function NuevaPublicacion() {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
 
+  const fetchBibliotecaFn = useServerFn(fetchBiblioteca);
+  const uploadContenidoPropioFn = useServerFn(uploadContenidoPropio);
+  const createPublicacionFn = useServerFn(createPublicacion);
+
   // Generation
   const [generating, setGenerating] = useState(false);
   const [regeneratingImg, setRegeneratingImg] = useState(false);
@@ -91,11 +100,7 @@ function NuevaPublicacion() {
   );
 
   useEffect(() => {
-    supabase
-      .from("biblioteca")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }: { data: Archivo[] | null }) => setBiblioteca((data ?? []) as Archivo[]));
+    fetchBibliotecaFn().then((data) => setBiblioteca(data ?? []));
   }, []);
 
   useEffect(() => {
@@ -136,25 +141,25 @@ function NuevaPublicacion() {
     setUploading(true);
 
     const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase();
-    const slug = (s: string) => (s || "sin-nombre").toLowerCase()
+    const slugify = (s: string) => (s || "sin-nombre").toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "sin-nombre";
-    const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
-    const ts = `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
-    const path = `${slug(equipo)}_${slug(angulo)}_${ts}.${ext}`;
-    const { error } = await supabase.storage
-      .from("contenido_propio")
-      .upload(path, file, { contentType: file.type, upsert: false });
+    const d = new Date(); const pad = (n: number) => String(n).padStart(2, "0");
+    const ts = `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+    const path = `${slugify(equipo)}_${slugify(angulo)}_${ts}.${ext}`;
 
-    if (error) {
-      toast.error("No se pudo subir: " + error.message);
-      setUploading(false);
-      return;
+    try {
+      const ab = await file.arrayBuffer();
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+      const { publicUrl } = await uploadContenidoPropioFn({
+        data: { fileBase64: b64, mimeType: file.type, path },
+      });
+      setUploadedUrl(publicUrl);
+      toast.success("Archivo subido");
+    } catch (e) {
+      toast.error("No se pudo subir: " + (e as Error).message);
     }
-    const { data } = supabase.storage.from("contenido_propio").getPublicUrl(path);
-    setUploadedUrl(data.publicUrl);
     setUploading(false);
-    toast.success("Archivo subido");
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -290,12 +295,17 @@ function NuevaPublicacion() {
       contenido_tipo: origen === "contenido_propio" ? uploadTipo : null,
     };
 
-    const { data, error } = await supabase.from("publicaciones").insert(payload).select().single();
-    if (error) { toast.error("No se pudo guardar: " + error.message); return; }
-
-    if (contexto.length && data) {
-      await supabase.from("publicacion_contexto")
-        .insert(contexto.map((archivo_id) => ({ publicacion_id: data.id, archivo_id })));
+    let data: { id: string } | null = null;
+    try {
+      data = await createPublicacionFn({
+        data: {
+          publicacion: payload as Parameters<typeof createPublicacionFn>[0]["data"]["publicacion"],
+          contexto,
+        },
+      });
+    } catch (e) {
+      toast.error("No se pudo guardar: " + (e as Error).message);
+      return;
     }
 
     if (fechaProgramada) {

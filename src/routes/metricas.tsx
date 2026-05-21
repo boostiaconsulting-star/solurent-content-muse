@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase, type Publicacion } from "@/lib/content-center";
+import { type Publicacion } from "@/lib/content-center";
+import { fetchPublicaciones } from "@/lib/db.functions";
 import { BarChart3, CheckCircle2, Clock, Send } from "lucide-react";
 
 export const Route = createFileRoute("/metricas")({
@@ -16,12 +18,10 @@ export const Route = createFileRoute("/metricas")({
 
 function Metricas() {
   const [items, setItems] = useState<Publicacion[]>([]);
+  const fetchPublicacionesFn = useServerFn(fetchPublicaciones);
 
   useEffect(() => {
-    supabase
-      .from("publicaciones")
-      .select("*")
-      .then(({ data }: { data: Publicacion[] | null }) => setItems((data ?? []) as Publicacion[]));
+    fetchPublicacionesFn().then((data) => setItems(data ?? []));
   }, []);
 
   const stats = useMemo(() => {

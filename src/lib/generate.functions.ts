@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { dbGetBranding } from "@/db/client";
+import { getCfEnv } from "@/lib/cf-env";
 
 type GenInput = {
   equipo: string;
@@ -29,9 +30,9 @@ type BrandCtx = { colors?: Record<string, string> | null; logo_url?: string | nu
 
 async function loadBranding(): Promise<BrandCtx> {
   try {
-    const { data } = await supabaseAdmin
-      .from("branding").select("colors, logo_url").eq("id", "default").maybeSingle();
-    return (data ?? null) as BrandCtx;
+    const row = await dbGetBranding();
+    if (!row) return null;
+    return { colors: row.colors, logo_url: row.logo_url } as BrandCtx;
   } catch { return null; }
 }
 
@@ -78,14 +79,11 @@ export function buildAssetName(equipo: string, ext: string): string {
 }
 
 async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): Promise<string> {
+  const { CONTENIDO_PROPIO, R2_PUBLIC_URL_CONTENIDO } = getCfEnv();
   const ext = (mime.split("/")[1]?.split(";")[0] || "png").toLowerCase().replace("jpeg", "jpg");
-  const path = `gen/${buildAssetName(equipo, ext)}`;
-  const { error: upErr } = await supabaseAdmin.storage
-    .from("contenido_propio")
-    .upload(path, bytes, { contentType: mime, upsert: false });
-  if (upErr) throw new Error("No se pudo guardar la imagen: " + upErr.message);
-  const { data: pub } = supabaseAdmin.storage.from("contenido_propio").getPublicUrl(path);
-  return pub.publicUrl;
+  const key = `gen/${buildAssetName(equipo, ext)}`;
+  await CONTENIDO_PROPIO.put(key, bytes, { httpMetadata: { contentType: mime } });
+  return `${R2_PUBLIC_URL_CONTENIDO}/${key}`;
 }
 
 /** Image-to-image / reference-aware generation via Lovable AI Nano Banana. */
