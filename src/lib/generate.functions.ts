@@ -8,7 +8,7 @@ type GenInput = {
   formato: string;
   redes: string[];
   contextoExtra?: string;
-  /** Public URLs of reference images. If provided, generation uses Higgsfield image-to-image. */
+  /** Public URLs of reference images. If provided, generation uses multimodal (text + image). */
   referenceImageUrls?: string[];
   /** Free-form additional instructions from the user (chat in step 4). */
   instrucciones?: string;
@@ -100,7 +100,57 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
   return pub.publicUrl;
 }
 
-/** Generación vía Higgsfield Soul. Soporta text-to-image y image-to-image (referencia opcional). */
+/** Generación vía Google Gemini 2.5 Flash Image (Nano Banana). Soporta text-to-image y multimodal. */
+async function generateWithGemini(data: GenInput, brand: BrandCtx): Promise<string> {
+  const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+  if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY no configurada");
+
+  const refs = (data.referenceImageUrls ?? []).slice(0, 4);
+  const hasRefs = refs.length > 0;
+  const prompt = buildPrompt(data, hasRefs, brand);
+
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  for (const url of refs) {
+    const imgRes = await fetch(url);
+    if (!imgRes.ok) throw new Error(`No se pudo descargar imagen de referencia (${imgRes.status}): ${url}`);
+    const refMime = imgRes.headers.get("content-type") || "image/jpeg";
+    const refBuf = Buffer.from(await imgRes.arrayBuffer());
+    parts.push({ inlineData: { mimeType: refMime, data: refBuf.toString("base64") } });
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${GOOGLE_API_KEY}`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    if (res.status === 401 || res.status === 403) throw new Error("Credenciales de Google AI inválidas.");
+    if (res.status === 429) throw new Error("Límite de Google AI alcanzado, intenta de nuevo en un momento.");
+    throw new Error(`Error generando imagen (${res.status}): ${t}`);
+  }
+
+  const json = await res.json();
+  const candidateParts: Array<Record<string, any>> = json.candidates?.[0]?.content?.parts ?? [];
+  const imgPart = candidateParts.find((p) => p.inlineData?.data);
+  if (!imgPart) {
+    const reason = json.candidates?.[0]?.finishReason || "sin imagen";
+    throw new Error(`Gemini no devolvió imagen (${reason}): ${JSON.stringify(json).slice(0, 300)}`);
+  }
+
+  const b64: string = imgPart.inlineData.data;
+  const mime: string = imgPart.inlineData.mimeType || "image/png";
+  const bytes = new Uint8Array(Buffer.from(b64, "base64"));
+  return uploadToBucket(bytes, mime, data.equipo);
+}
+
+// === FALLBACK: Higgsfield Soul (text-to-image + image-to-image). Mantener comentado. ===
+/*
 async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<string> {
   const HF_KEY = process.env.Higgsfield_API_ID;
   const HF_SECRET = process.env.Higgsfield_Key_Secret;
@@ -162,12 +212,13 @@ async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<
   const bytes = new Uint8Array(await imgRes.arrayBuffer());
   return uploadToBucket(bytes, mime, data.equipo);
 }
+*/
 
 export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
     const brand = await loadBranding();
-    const url = await generateWithHiggsfield(data, brand);
+    const url = await generateWithGemini(data, brand);
     return { url };
   });
 
