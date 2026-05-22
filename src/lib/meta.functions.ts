@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { readEnv } from "@/lib/env";
 
 /**
  * Payload compatible con el de Make para sustitución directa.
@@ -33,12 +34,13 @@ export type MetaResult = {
   results: MetaResultPerNetwork[];
 };
 
-const GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v21.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+// Lazy getter: las env vars no están disponibles a nivel de módulo en CF Workers
+// (setCfEnv todavía no se ha llamado). Resolvemos en cada uso.
+const graphBase = () => `https://graph.facebook.com/${readEnv("META_GRAPH_VERSION") ?? "v21.0"}`;
 
 async function graphFetch(path: string, init: RequestInit & { qs?: Record<string, string> } = {}) {
   const { qs, ...rest } = init;
-  const url = new URL(`${GRAPH_BASE}${path}`);
+  const url = new URL(`${graphBase()}${path}`);
   if (qs) for (const [k, v] of Object.entries(qs)) url.searchParams.set(k, v);
   const res = await fetch(url.toString(), rest);
   const text = await res.text();
@@ -166,9 +168,9 @@ export function buildMetaPayload(input: {
 export const publishToMeta = createServerFn({ method: "POST" })
   .inputValidator((d: MetaPayload) => d)
   .handler(async ({ data }): Promise<MetaResult> => {
-    const token = process.env.META_ACCESS_TOKEN ?? process.env.META_TOKEN;
-    const igUserId = process.env.META_IG_USER_ID;
-    const pageId = process.env.META_FB_PAGE_ID;
+    const token = readEnv("META_ACCESS_TOKEN") ?? readEnv("META_TOKEN");
+    const igUserId = readEnv("META_IG_USER_ID");
+    const pageId = readEnv("META_FB_PAGE_ID");
     if (!token) throw new Error("META_ACCESS_TOKEN no configurado");
 
     const results: MetaResultPerNetwork[] = [];
@@ -241,13 +243,13 @@ export const publishToMeta = createServerFn({ method: "POST" })
 // Borrar después de validar el tipo de token y scopes.
 export const debugMetaToken = createServerFn({ method: "GET" })
   .handler(async () => {
-    const token = process.env.META_ACCESS_TOKEN ?? process.env.META_TOKEN;
-    const igUserId = process.env.META_IG_USER_ID;
-    const pageId = process.env.META_FB_PAGE_ID;
+    const token = readEnv("META_ACCESS_TOKEN") ?? readEnv("META_TOKEN");
+    const igUserId = readEnv("META_IG_USER_ID");
+    const pageId = readEnv("META_FB_PAGE_ID");
     if (!token) throw new Error("META_ACCESS_TOKEN / META_TOKEN no configurado");
 
     const safeFetch = async (path: string, qs: Record<string, string>) => {
-      const url = new URL(`${GRAPH_BASE}${path}`);
+      const url = new URL(`${graphBase()}${path}`);
       for (const [k, v] of Object.entries(qs)) url.searchParams.set(k, v);
       try {
         const res = await fetch(url.toString());

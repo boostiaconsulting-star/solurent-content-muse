@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { readEnv } from "@/lib/env";
 
 type GenInput = {
   equipo: string;
@@ -102,7 +103,7 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
 
 /** Generación vía Google Gemini 2.5 Flash Image (Nano Banana). Soporta text-to-image y multimodal. */
 async function generateWithGemini(data: GenInput, brand: BrandCtx): Promise<string> {
-  const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+  const GOOGLE_API_KEY = readEnv("GOOGLE_API_KEY");
   if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY no configurada");
 
   const refs = (data.referenceImageUrls ?? []).slice(0, 4);
@@ -152,8 +153,8 @@ async function generateWithGemini(data: GenInput, brand: BrandCtx): Promise<stri
 // === FALLBACK: Higgsfield Soul (text-to-image + image-to-image). Mantener comentado. ===
 /*
 async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<string> {
-  const HF_KEY = process.env.Higgsfield_API_ID;
-  const HF_SECRET = process.env.Higgsfield_Key_Secret;
+  const HF_KEY = readEnv("Higgsfield_API_ID");
+  const HF_SECRET = readEnv("Higgsfield_Key_Secret");
   if (!HF_KEY || !HF_SECRET) throw new Error("Higgsfield_API_ID / Higgsfield_Key_Secret no configuradas");
 
   const refs = (data.referenceImageUrls ?? []).slice(0, 1); // Soul acepta 1 imagen de referencia
@@ -226,7 +227,7 @@ export const generateImage = createServerFn({ method: "POST" })
 // Borrar después de validar el nombre correcto del modelo.
 export const listGeminiModels = createServerFn({ method: "GET" })
   .handler(async () => {
-    const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+    const GOOGLE_API_KEY = readEnv("GOOGLE_API_KEY");
     if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY no configurada");
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GOOGLE_API_KEY}`);
     const json = await res.json();
@@ -256,7 +257,7 @@ export const listGeminiModels = createServerFn({ method: "GET" })
 export const generateCopies = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? process.env.Anthropic_API_Key;
+    const ANTHROPIC_API_KEY = readEnv("ANTHROPIC_API_KEY") ?? readEnv("Anthropic_API_Key");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY no configurada");
 
     const redesBlock = data.redes

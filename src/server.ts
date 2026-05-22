@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { setCfEnv } from "./lib/env";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -66,22 +67,9 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-// En Cloudflare Workers, los secrets/vars llegan en el argumento `env`, no en
-// process.env. Los .functions.ts y client.server.ts leen process.env.X, así
-// que copiamos las strings de `env` a process.env al inicio de cada request.
-function hydrateProcessEnv(env: unknown): void {
-  if (!env || typeof env !== "object") return;
-  if (typeof process === "undefined" || !process.env) return;
-  for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
-    if (typeof v === "string" && process.env[k] === undefined) {
-      process.env[k] = v;
-    }
-  }
-}
-
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    hydrateProcessEnv(env);
+    setCfEnv(env);
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

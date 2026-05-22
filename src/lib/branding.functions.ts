@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { readEnv } from "@/lib/env";
 
 export type Brand = {
   website_url: string | null;
@@ -22,7 +23,7 @@ function absolutize(url: string, base: string): string {
 export const analyzeBranding = createServerFn({ method: "POST" })
   .inputValidator((d: { website_url: string }) => d)
   .handler(async ({ data }) => {
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+    const LOVABLE_API_KEY = readEnv("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurada");
 
     const url = data.website_url.startsWith("http") ? data.website_url : `https://${data.website_url}`;
