@@ -17,5 +17,5 @@ export function readEnv(name: string): string | undefined {
     typeof process !== "undefined" && process.env ? process.env[name] : undefined;
   if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess;
   const v = cfEnv[name];
-  return typeof v === "string" ? v : undefined;
+  return typeof v === "string" && v.length > 0 ? v : undefined;
 }

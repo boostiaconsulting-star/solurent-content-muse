@@ -22,8 +22,8 @@ import { cn } from "@/lib/utils";
 import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
-import { generateImage, generateCopies, listGeminiModels } from "@/lib/generate.functions";
-import { publishToMeta, buildMetaPayload, debugMetaToken } from "@/lib/meta.functions";
+import { generateImage, generateCopies } from "@/lib/generate.functions";
+import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 
 export const Route = createFileRoute("/nueva")({
   head: () => ({
@@ -45,19 +45,8 @@ const IMG_MAX = 50 * 1024 * 1024;
 function NuevaPublicacion() {
   const navigate = useNavigate();
   const publishToMetaFn = useServerFn(publishToMeta);
-  const listGeminiModelsFn = useServerFn(listGeminiModels);
-  const debugMetaTokenFn = useServerFn(debugMetaToken);
   const [origen, setOrigen] = useState<Origen>("ia");
   const [step, setStep] = useState(1);
-
-  // DEBUG temporal — listar modelos Gemini disponibles
-  const [debugModels, setDebugModels] = useState<null | { total: number; imageModels: Array<{ name: string; displayName?: string; methods: string[] }>; allNames: string[] }>(null);
-  const [debugLoading, setDebugLoading] = useState(false);
-  const [debugError, setDebugError] = useState<string | null>(null);
-  // DEBUG temporal — introspectar token Meta
-  const [debugMeta, setDebugMeta] = useState<unknown>(null);
-  const [debugMetaLoading, setDebugMetaLoading] = useState(false);
-  const [debugMetaError, setDebugMetaError] = useState<string | null>(null);
 
   // Common
   const [equipo, setEquipo] = useState("");
@@ -395,73 +384,6 @@ function NuevaPublicacion() {
         <h1 className="text-3xl font-semibold">Nueva publicación</h1>
         <p className="text-muted-foreground">Genera con IA o sube tu propio contenido.</p>
       </header>
-
-      {/* DEBUG TEMPORAL — borrar al confirmar nombre del modelo Gemini */}
-      <Card className="mb-6 border-dashed">
-        <CardContent className="py-3 space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={debugLoading}
-              onClick={async () => {
-                setDebugLoading(true);
-                setDebugError(null);
-                try {
-                  const r = await listGeminiModelsFn();
-                  setDebugModels(r);
-                } catch (e) {
-                  setDebugError((e as Error).message);
-                } finally {
-                  setDebugLoading(false);
-                }
-              }}
-            >
-              {debugLoading ? "Listando modelos…" : "🐛 Listar modelos Gemini"}
-            </Button>
-            {debugModels && <span className="text-xs text-muted-foreground">total: {debugModels.total} · imageModels: {debugModels.imageModels.length}</span>}
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={debugMetaLoading}
-              onClick={async () => {
-                setDebugMetaLoading(true);
-                setDebugMetaError(null);
-                try {
-                  const r = await debugMetaTokenFn();
-                  setDebugMeta(r);
-                } catch (e) {
-                  setDebugMetaError((e as Error).message);
-                } finally {
-                  setDebugMetaLoading(false);
-                }
-              }}
-            >
-              {debugMetaLoading ? "Inspeccionando token…" : "🔑 Inspeccionar token Meta"}
-            </Button>
-          </div>
-          {debugError && <p className="text-xs text-red-600 break-all">{debugError}</p>}
-          {debugModels && (
-            <div className="text-xs space-y-2">
-              <div>
-                <div className="font-medium">Modelos con "image":</div>
-                <pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(debugModels.imageModels, null, 2)}</pre>
-              </div>
-              <details>
-                <summary className="cursor-pointer font-medium">Todos los nombres ({debugModels.allNames.length})</summary>
-                <pre className="bg-muted p-2 rounded overflow-x-auto">{debugModels.allNames.join("\n")}</pre>
-              </details>
-            </div>
-          )}
-          {debugMetaError && <p className="text-xs text-red-600 break-all">{debugMetaError}</p>}
-          {debugMeta != null && (
-            <div className="text-xs">
-              <div className="font-medium">Meta token debug:</div>
-              <pre className="bg-muted p-2 rounded overflow-x-auto max-h-96">{JSON.stringify(debugMeta, null, 2)}</pre>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Stepper current={stepperCurrent} />
 
