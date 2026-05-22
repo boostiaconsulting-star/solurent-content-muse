@@ -239,3 +239,47 @@ export const publishToMeta = createServerFn({ method: "POST" })
     return { ok: anyAttempted && !anyFailed, results };
   });
 
+// === DEBUG TEMPORAL: introspecta el token Meta ===
+// Borrar después de validar el tipo de token y scopes.
+export const debugMetaToken = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const token = readEnv("META_ACCESS_TOKEN") ?? readEnv("META_TOKEN");
+    const igUserId = readEnv("META_IG_USER_ID");
+    const pageId = readEnv("META_FB_PAGE_ID");
+    if (!token) throw new Error("META_ACCESS_TOKEN / META_TOKEN no configurado");
+
+    const safeFetch = async (path: string, qs: Record<string, string>) => {
+      const url = new URL(`${graphBase()}${path}`);
+      for (const [k, v] of Object.entries(qs)) url.searchParams.set(k, v);
+      try {
+        const res = await fetch(url.toString());
+        const text = await res.text();
+        let body: unknown = null;
+        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        return { ok: res.ok, status: res.status, body };
+      } catch (e) {
+        return { ok: false, status: 0, body: (e as Error).message };
+      }
+    };
+
+    const [debug, me, accounts] = await Promise.all([
+      safeFetch("/debug_token", { input_token: token, access_token: token }),
+      safeFetch("/me", { fields: "id,name", access_token: token }),
+      safeFetch("/me/accounts", { fields: "id,name,access_token,tasks", access_token: token }),
+    ]);
+
+    return {
+      envConfigured: {
+        META_ACCESS_TOKEN_or_META_TOKEN: true,
+        META_IG_USER_ID: !!igUserId,
+        META_FB_PAGE_ID: !!pageId,
+      },
+      configuredPageId: pageId ?? null,
+      configuredIgUserId: igUserId ?? null,
+      tokenLastChars: `…${token.slice(-6)}`,
+      tokenLength: token.length,
+      debugToken: debug,
+      me: me,
+      accounts: accounts,
+    };
+  });
