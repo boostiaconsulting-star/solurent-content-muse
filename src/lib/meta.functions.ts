@@ -73,26 +73,32 @@ async function waitForIgContainer(containerId: string, token: string, timeoutMs 
 
 async function publishInstagram(opts: {
   igUserId: string;
-  token: string;
+  pageId: string;
+  token: string; // USER access token — se intercambia internamente por PAGE token
   imageUrl: string;
   caption: string;
 }): Promise<string> {
+  // IG content publish API rechaza el USER token con (#10) Application does not
+  // have permission for this action. Se necesita el PAGE access token de la
+  // página FB que posee la cuenta IG.
+  const igToken = await getPageAccessToken(opts.pageId, opts.token);
+
   const created = await graphFetch(`/${opts.igUserId}/media`, {
     method: "POST",
     qs: {
       image_url: opts.imageUrl,
       caption: opts.caption,
-      access_token: opts.token,
+      access_token: igToken,
     },
   });
   const containerId = created?.id;
   if (!containerId) throw new Error("IG no devolvió container id");
 
-  await waitForIgContainer(containerId, opts.token);
+  await waitForIgContainer(containerId, igToken);
 
   const published = await graphFetch(`/${opts.igUserId}/media_publish`, {
     method: "POST",
-    qs: { creation_id: containerId, access_token: opts.token },
+    qs: { creation_id: containerId, access_token: igToken },
   });
   const mediaId = published?.id;
   if (!mediaId) throw new Error("IG no devolvió media id al publicar");
@@ -101,10 +107,13 @@ async function publishInstagram(opts: {
 
 async function publishInstagramReel(opts: {
   igUserId: string;
-  token: string;
+  pageId: string;
+  token: string; // USER access token
   videoUrl: string;
   caption: string;
 }): Promise<string> {
+  const igToken = await getPageAccessToken(opts.pageId, opts.token);
+
   const created = await graphFetch(`/${opts.igUserId}/media`, {
     method: "POST",
     qs: {
@@ -112,18 +121,18 @@ async function publishInstagramReel(opts: {
       video_url: opts.videoUrl,
       caption: opts.caption,
       share_to_feed: "true",
-      access_token: opts.token,
+      access_token: igToken,
     },
   });
   const containerId = created?.id;
   if (!containerId) throw new Error("IG no devolvió container id para video");
 
   // Videos tardan más en procesarse — hasta 5 min para reels largos.
-  await waitForIgContainer(containerId, opts.token, 5 * 60_000);
+  await waitForIgContainer(containerId, igToken, 5 * 60_000);
 
   const published = await graphFetch(`/${opts.igUserId}/media_publish`, {
     method: "POST",
-    qs: { creation_id: containerId, access_token: opts.token },
+    qs: { creation_id: containerId, access_token: igToken },
   });
   const mediaId = published?.id;
   if (!mediaId) throw new Error("IG no devolvió media id al publicar reel");
@@ -262,21 +271,26 @@ export async function publishMetaPayload(data: MetaPayload): Promise<MetaResult>
       throw new Error(`Falta URL del medio (${isVideo ? "video" : "imagen"}) en imagen_url`);
     }
 
-    // Instagram
+    // Instagram — requiere también META_FB_PAGE_ID porque el token de IG se
+    // deriva del Page Access Token de la página FB que posee la cuenta IG.
     if (wantsIG) {
       if (!igUserId) {
         results.push({ network: "instagram", ok: false, error: "META_IG_USER_ID no configurado" });
+      } else if (!pageId) {
+        results.push({ network: "instagram", ok: false, error: "META_FB_PAGE_ID requerido para IG (se usa para derivar el Page Access Token)" });
       } else {
         try {
           const id = isVideo
             ? await publishInstagramReel({
                 igUserId,
+                pageId,
                 token,
                 videoUrl: data.imagen_url,
                 caption: data.copy.instagram || "",
               })
             : await publishInstagram({
                 igUserId,
+                pageId,
                 token,
                 imageUrl: data.imagen_url,
                 caption: data.copy.instagram || "",
