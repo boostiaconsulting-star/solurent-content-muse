@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { setCfEnv } from "./lib/env";
+import { runScheduledPublications } from "./lib/cron";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -67,6 +68,9 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+type ScheduledController = { scheduledTime: number; cron: string };
+type ExecutionCtx = { waitUntil(promise: Promise<unknown>): void };
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     setCfEnv(env);
@@ -78,5 +82,20 @@ export default {
       console.error(error);
       return brandedErrorResponse();
     }
+  },
+
+  // Trigger cron de Cloudflare Workers — corre según `triggers.crons` en wrangler.jsonc.
+  // Cada tick: busca publicaciones programadas vencidas y las publica a Meta.
+  async scheduled(controller: ScheduledController, env: unknown, ctx: ExecutionCtx) {
+    setCfEnv(env);
+    ctx.waitUntil(
+      runScheduledPublications()
+        .then((stats) => {
+          if (stats.scanned > 0) {
+            console.log(`[cron ${controller.cron}] scanned=${stats.scanned} published=${stats.published} failed=${stats.failed}`);
+          }
+        })
+        .catch((err) => console.error(`[cron ${controller.cron}] error:`, (err as Error).message)),
+    );
   },
 };

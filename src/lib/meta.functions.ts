@@ -182,9 +182,11 @@ export function buildMetaPayload(input: {
   };
 }
 
-export const publishToMeta = createServerFn({ method: "POST" })
-  .inputValidator((d: MetaPayload) => d)
-  .handler(async ({ data }): Promise<MetaResult> => {
+/**
+ * Núcleo de publicación a Meta — reusable desde server fn (HTTP) y cron.
+ * Lee credenciales con readEnv. Lanza si falta el token o el payload es inválido.
+ */
+export async function publishMetaPayload(data: MetaPayload): Promise<MetaResult> {
     const token = readEnv("META_ACCESS_TOKEN") ?? readEnv("META_TOKEN");
     const igUserId = readEnv("META_IG_USER_ID");
     const pageId = readEnv("META_FB_PAGE_ID");
@@ -254,4 +256,8 @@ export const publishToMeta = createServerFn({ method: "POST" })
     const anyAttempted = results.some((r) => !r.skipped);
     const anyFailed = results.some((r) => !r.ok && !r.skipped);
     return { ok: anyAttempted && !anyFailed, results };
-  });
+}
+
+export const publishToMeta = createServerFn({ method: "POST" })
+  .inputValidator((d: MetaPayload) => d)
+  .handler(async ({ data }): Promise<MetaResult> => publishMetaPayload(data));

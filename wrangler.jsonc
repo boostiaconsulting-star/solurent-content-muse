@@ -4,4 +4,9 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  // Cron: cada minuto. Busca publicaciones con fecha_programada <= now() y publica.
+  // Coste mensual estimado: 60*24*30 = 43,200 invocations (free tier cubre 100K/día).
+  "triggers": {
+    "crons": ["* * * * *"]
+  }
 }
