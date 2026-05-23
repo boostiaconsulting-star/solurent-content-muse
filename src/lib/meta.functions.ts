@@ -101,17 +101,34 @@ async function publishInstagram(opts: {
 
 async function publishFacebook(opts: {
   pageId: string;
-  token: string;
+  token: string; // USER access token
   imageUrl: string;
   message: string;
 }): Promise<string> {
+  // FB rechaza /photos con USER token devolviendo (#200) publish_actions deprecated
+  // aunque tenga pages_manage_posts. Intercambiamos el USER token por el PAGE
+  // access token (ese sí permite escribir en la página).
+  let publishToken = opts.token;
+  try {
+    const tokenData = await graphFetch(`/${opts.pageId}`, {
+      method: "GET",
+      qs: { fields: "access_token", access_token: opts.token },
+    });
+    if (typeof tokenData?.access_token === "string" && tokenData.access_token.length > 0) {
+      publishToken = tokenData.access_token;
+    }
+  } catch {
+    // si falla la derivación, intentamos con el USER token (puede que algunos
+    // tokens long-lived sí funcionen directo)
+  }
+
   const data = await graphFetch(`/${opts.pageId}/photos`, {
     method: "POST",
     qs: {
       url: opts.imageUrl,
       message: opts.message,
       published: "true",
-      access_token: opts.token,
+      access_token: publishToken,
     },
   });
   const id = data?.post_id || data?.id;
