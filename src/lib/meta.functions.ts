@@ -99,6 +99,53 @@ async function publishInstagram(opts: {
   return mediaId;
 }
 
+async function publishInstagramReel(opts: {
+  igUserId: string;
+  token: string;
+  videoUrl: string;
+  caption: string;
+}): Promise<string> {
+  const created = await graphFetch(`/${opts.igUserId}/media`, {
+    method: "POST",
+    qs: {
+      media_type: "REELS",
+      video_url: opts.videoUrl,
+      caption: opts.caption,
+      share_to_feed: "true",
+      access_token: opts.token,
+    },
+  });
+  const containerId = created?.id;
+  if (!containerId) throw new Error("IG no devolvió container id para video");
+
+  // Videos tardan más en procesarse — hasta 5 min para reels largos.
+  await waitForIgContainer(containerId, opts.token, 5 * 60_000);
+
+  const published = await graphFetch(`/${opts.igUserId}/media_publish`, {
+    method: "POST",
+    qs: { creation_id: containerId, access_token: opts.token },
+  });
+  const mediaId = published?.id;
+  if (!mediaId) throw new Error("IG no devolvió media id al publicar reel");
+  return mediaId;
+}
+
+/** Intercambia USER token por PAGE access token; FB lo requiere para escribir en páginas. */
+async function getPageAccessToken(pageId: string, userToken: string): Promise<string> {
+  try {
+    const tokenData = await graphFetch(`/${pageId}`, {
+      method: "GET",
+      qs: { fields: "access_token", access_token: userToken },
+    });
+    if (typeof tokenData?.access_token === "string" && tokenData.access_token.length > 0) {
+      return tokenData.access_token;
+    }
+  } catch {
+    // si falla la derivación, caemos al USER token (algunos long-lived funcionan directo)
+  }
+  return userToken;
+}
+
 async function publishFacebook(opts: {
   pageId: string;
   token: string; // USER access token
@@ -106,21 +153,8 @@ async function publishFacebook(opts: {
   message: string;
 }): Promise<string> {
   // FB rechaza /photos con USER token devolviendo (#200) publish_actions deprecated
-  // aunque tenga pages_manage_posts. Intercambiamos el USER token por el PAGE
-  // access token (ese sí permite escribir en la página).
-  let publishToken = opts.token;
-  try {
-    const tokenData = await graphFetch(`/${opts.pageId}`, {
-      method: "GET",
-      qs: { fields: "access_token", access_token: opts.token },
-    });
-    if (typeof tokenData?.access_token === "string" && tokenData.access_token.length > 0) {
-      publishToken = tokenData.access_token;
-    }
-  } catch {
-    // si falla la derivación, intentamos con el USER token (puede que algunos
-    // tokens long-lived sí funcionen directo)
-  }
+  // aunque tenga pages_manage_posts.
+  const publishToken = await getPageAccessToken(opts.pageId, opts.token);
 
   const data = await graphFetch(`/${opts.pageId}/photos`, {
     method: "POST",
@@ -133,6 +167,30 @@ async function publishFacebook(opts: {
   });
   const id = data?.post_id || data?.id;
   if (!id) throw new Error("FB no devolvió id");
+  return id;
+}
+
+async function publishFacebookVideo(opts: {
+  pageId: string;
+  token: string; // USER access token
+  videoUrl: string;
+  description: string;
+}): Promise<string> {
+  const publishToken = await getPageAccessToken(opts.pageId, opts.token);
+
+  // POST /{page-id}/videos con file_url para que Meta descargue el video desde
+  // nuestra URL pública. El processing en Meta sigue async pero la API responde
+  // con el id inmediatamente.
+  const data = await graphFetch(`/${opts.pageId}/videos`, {
+    method: "POST",
+    qs: {
+      file_url: opts.videoUrl,
+      description: opts.description,
+      access_token: publishToken,
+    },
+  });
+  const id = data?.id;
+  if (!id) throw new Error("FB no devolvió id del video");
   return id;
 }
 
@@ -195,12 +253,13 @@ export async function publishMetaPayload(data: MetaPayload): Promise<MetaResult>
     const results: MetaResultPerNetwork[] = [];
     const wantsIG = data.redes.includes("instagram");
     const wantsFB = data.redes.includes("facebook");
+    const isVideo = data.contenido_tipo === "video";
 
-    if (data.contenido_tipo !== "image") {
-      throw new Error("Publicación directa a Meta solo soporta imagen en este paso");
+    if (data.contenido_tipo !== "image" && data.contenido_tipo !== "video") {
+      throw new Error("contenido_tipo debe ser 'image' o 'video'");
     }
     if (!data.imagen_url) {
-      throw new Error("Falta imagen_url para publicar en Meta");
+      throw new Error(`Falta URL del medio (${isVideo ? "video" : "imagen"}) en imagen_url`);
     }
 
     // Instagram
@@ -209,12 +268,19 @@ export async function publishMetaPayload(data: MetaPayload): Promise<MetaResult>
         results.push({ network: "instagram", ok: false, error: "META_IG_USER_ID no configurado" });
       } else {
         try {
-          const id = await publishInstagram({
-            igUserId,
-            token,
-            imageUrl: data.imagen_url,
-            caption: data.copy.instagram || "",
-          });
+          const id = isVideo
+            ? await publishInstagramReel({
+                igUserId,
+                token,
+                videoUrl: data.imagen_url,
+                caption: data.copy.instagram || "",
+              })
+            : await publishInstagram({
+                igUserId,
+                token,
+                imageUrl: data.imagen_url,
+                caption: data.copy.instagram || "",
+              });
           results.push({ network: "instagram", ok: true, id });
         } catch (e) {
           results.push({ network: "instagram", ok: false, error: (e as Error).message });
@@ -228,12 +294,19 @@ export async function publishMetaPayload(data: MetaPayload): Promise<MetaResult>
         results.push({ network: "facebook", ok: false, error: "META_FB_PAGE_ID no configurado" });
       } else {
         try {
-          const id = await publishFacebook({
-            pageId,
-            token,
-            imageUrl: data.imagen_url,
-            message: data.copy.facebook || "",
-          });
+          const id = isVideo
+            ? await publishFacebookVideo({
+                pageId,
+                token,
+                videoUrl: data.imagen_url,
+                description: data.copy.facebook || "",
+              })
+            : await publishFacebook({
+                pageId,
+                token,
+                imageUrl: data.imagen_url,
+                message: data.copy.facebook || "",
+              });
           results.push({ network: "facebook", ok: true, id });
         } catch (e) {
           results.push({ network: "facebook", ok: false, error: (e as Error).message });
