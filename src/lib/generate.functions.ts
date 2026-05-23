@@ -89,12 +89,10 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
   const ext = normalizeExt(mime);
   const safeMime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
   const path = `gen/${buildAssetName(equipo, ext)}`;
-  console.log("[uploadToBucket]", { path, mime, safeMime, ext, bytes: bytes.byteLength });
   const { error: upErr } = await supabaseAdmin.storage
     .from("contenido_propio")
     .upload(path, bytes, { contentType: safeMime, upsert: false });
   if (upErr) {
-    console.error("[uploadToBucket] upload error", { path, safeMime, message: upErr.message });
     throw new Error("No se pudo guardar la imagen: " + upErr.message);
   }
   const { data: pub } = supabaseAdmin.storage.from("contenido_propio").getPublicUrl(path);
