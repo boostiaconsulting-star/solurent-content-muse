@@ -40,6 +40,7 @@ export async function runScheduledPublications(): Promise<{
   }
 
   const rows = (pending ?? []) as PublicacionRow[];
+  console.log(`[cron] query: now=${nowIso} found=${rows.length} ids=${rows.map((r) => r.id).join(",") || "(none)"}`);
   let published = 0;
   let failed = 0;
 

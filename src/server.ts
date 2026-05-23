@@ -88,14 +88,13 @@ export default {
   // Cada tick: busca publicaciones programadas vencidas y las publica a Meta.
   async scheduled(controller: ScheduledController, env: unknown, ctx: ExecutionCtx) {
     setCfEnv(env);
+    console.log(`[cron ${controller.cron}] tick at ${new Date(controller.scheduledTime).toISOString()}`);
     ctx.waitUntil(
       runScheduledPublications()
         .then((stats) => {
-          if (stats.scanned > 0) {
-            console.log(`[cron ${controller.cron}] scanned=${stats.scanned} published=${stats.published} failed=${stats.failed}`);
-          }
+          console.log(`[cron ${controller.cron}] result: scanned=${stats.scanned} published=${stats.published} failed=${stats.failed}`);
         })
-        .catch((err) => console.error(`[cron ${controller.cron}] error:`, (err as Error).message)),
+        .catch((err) => console.error(`[cron ${controller.cron}] error:`, (err as Error).message, (err as Error).stack)),
     );
   },
 };
