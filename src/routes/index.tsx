@@ -188,13 +188,22 @@ function Index() {
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((p) => (
+          {items.map((p) => {
+            // Fallback para publicaciones legacy de contenido propio donde
+            // imagen_url quedó null pero la URL real está en contenido_url.
+            const mediaUrl = p.imagen_url ?? p.contenido_url ?? null;
+            const isVideo = p.contenido_tipo === "video";
+            return (
             <Card key={p.id} className="overflow-hidden relative group">
-              {p.imagen_url && (
+              {mediaUrl && (
                 <div className="aspect-video bg-muted relative group/img">
-                  <img src={p.imagen_url} alt={p.equipo ?? ""} className="w-full h-full object-cover" />
+                  {isVideo ? (
+                    <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                  ) : (
+                    <img src={mediaUrl} alt={p.equipo ?? ""} className="w-full h-full object-cover" />
+                  )}
                   <MediaActions
-                    url={p.imagen_url}
+                    url={mediaUrl}
                     caption={`${p.equipo ?? ""} · ${p.angulo ?? ""}`}
                     className="absolute bottom-2 left-2 opacity-0 group-hover/img:opacity-100 transition-opacity"
                   />
@@ -257,7 +266,8 @@ function Index() {
                 )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

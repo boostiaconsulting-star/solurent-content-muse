@@ -278,11 +278,17 @@ function NuevaPublicacion() {
   const guardarYEnviar = async () => {
     const fechaProgramada = fecha ? new Date(`${fecha}T${hora}:00`).toISOString() : null;
 
+    // imagen_url: si es IA usa la generada; si es contenido propio Y es imagen,
+    // también la guardamos aquí para que el listado (index.tsx) y el cron de
+    // publicación a Meta puedan leerla sin lógica condicional.
+    const imagenUrlForRow =
+      origen === "ia" ? imagenUrl : uploadTipo === "imagen" ? uploadedUrl : null;
+
     const payload: Record<string, unknown> = {
       equipo, idea: origen === "ia" ? idea : contextoExtra,
       angulo, formato: origen === "ia" ? formato : (uploadTipo === "video" ? "Video" : "Imagen"),
       redes, copy: copyByRed,
-      imagen_url: origen === "ia" ? imagenUrl : null,
+      imagen_url: imagenUrlForRow,
       fecha_programada: fechaProgramada,
       estado: "aprobado",
       origen,
