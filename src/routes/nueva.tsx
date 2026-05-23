@@ -372,7 +372,7 @@ function NuevaPublicacion() {
             </div>
             <h2 className="text-2xl font-semibold">¡Listo!</h2>
             <p className="text-muted-foreground">
-              Tu publicación fue enviada a Zernio y se publicará el {fechaResumen} en {redes.join(", ")}.
+              Tu publicación se publicará el {fechaResumen} en {redes.join(", ")}.
             </p>
             <div className="flex gap-2 mt-4">
               <Button onClick={resetAll}><Plus className="h-4 w-4 mr-2" /> Nueva publicación</Button>
@@ -737,7 +737,7 @@ function NuevaPublicacion() {
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4 mr-2" /> Atrás</Button>
-              <Button onClick={guardarYEnviar} disabled={!fecha}>Enviar a Zernio → publicar</Button>
+              <Button onClick={guardarYEnviar} disabled={!fecha}>Publicar</Button>
             </div>
           </CardContent>
         </Card>
