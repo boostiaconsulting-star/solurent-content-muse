@@ -373,11 +373,15 @@ function NuevaPublicacion() {
           equipo,
         });
         const res = await publishToMetaFn({ data: metaPayload });
-        if (!res.ok) {
-          const errs = res.results
-            .filter((r) => !r.ok && !r.skipped)
-            .map((r) => `${r.network}: ${r.error}`)
-            .join(" · ");
+        const attempted = res.results.filter((r) => !r.skipped);
+        const succeeded = attempted.filter((r) => r.ok);
+        const failed = attempted.filter((r) => !r.ok);
+
+        // Mismo criterio que el cron: lanzamos solo si nada salió. Si una red
+        // se publicó pero otra falló, marcamos publicado para que el cron no
+        // reintente y republique la red exitosa.
+        if (succeeded.length === 0) {
+          const errs = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
           throw new Error(errs || "Meta rechazó la publicación");
         }
         if (data) {
@@ -387,8 +391,12 @@ function NuevaPublicacion() {
             .eq("id", data.id);
         }
         setDone(true);
-        const pubIds = res.results.filter((r) => r.ok).map((r) => r.network).join(", ");
+        const pubIds = succeeded.map((r) => r.network).join(", ");
         toast.success(`Publicado en ${pubIds}`);
+        if (failed.length > 0) {
+          const failMsg = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
+          toast.error(`Falló en ${failed.map((r) => r.network).join(", ")} — ${failMsg}`);
+        }
         return;
       } catch (e) {
         toast.error("Guardado, pero falló publicación en Meta: " + (e as Error).message);

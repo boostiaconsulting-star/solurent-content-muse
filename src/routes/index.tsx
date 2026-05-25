@@ -64,11 +64,15 @@ function Index() {
         equipo: p.equipo ?? "",
       });
       const res = await publishToMetaFn({ data: payload });
-      if (!res.ok) {
-        const errs = res.results
-          .filter((r) => !r.ok && !r.skipped)
-          .map((r) => `${r.network}: ${r.error}`)
-          .join(" · ");
+      const attempted = res.results.filter((r) => !r.skipped);
+      const succeeded = attempted.filter((r) => r.ok);
+      const failed = attempted.filter((r) => !r.ok);
+
+      // Si al menos una red salió, marcamos publicado para que el cron no
+      // reintente y republique la(s) red(es) exitosa(s). La red fallida se
+      // pierde — el usuario la republica manual.
+      if (succeeded.length === 0) {
+        const errs = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
         throw new Error(errs || "Meta rechazó la publicación");
       }
       const { error } = await supabase
@@ -79,8 +83,12 @@ function Index() {
       setItems((prev) => prev.map((x) =>
         x.id === p.id ? { ...x, fecha_programada: null, estado: "publicado" } : x
       ));
-      const pubIds = res.results.filter((r) => r.ok).map((r) => r.network).join(", ");
+      const pubIds = succeeded.map((r) => r.network).join(", ");
       toast.success(`Publicado en ${pubIds}`);
+      if (failed.length > 0) {
+        const failMsg = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
+        toast.error(`Falló en ${failed.map((r) => r.network).join(", ")} — ${failMsg}`);
+      }
     } catch (e) {
       toast.error("No se pudo publicar: " + (e as Error).message);
     } finally {

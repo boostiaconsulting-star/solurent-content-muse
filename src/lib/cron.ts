@@ -82,11 +82,16 @@ export async function runScheduledPublications(): Promise<{
       });
 
       const result = await publishMetaPayload(payload);
-      if (!result.ok) {
-        const errs = result.results
-          .filter((r) => !r.ok && !r.skipped)
-          .map((r) => `${r.network}: ${r.error}`)
-          .join(" · ");
+      const attempted = result.results.filter((r) => !r.skipped);
+      const succeeded = attempted.filter((r) => r.ok);
+      const failed = attempted.filter((r) => !r.ok);
+
+      // Solo lanzamos (→ revert a 'aprobado' → retry) si NADIE salió. Si al
+      // menos una red se publicó, cerramos la fila para evitar que el próximo
+      // tick republique la(s) red(es) que ya salieron (causaba duplicados).
+      // La red fallida queda sin postear; se republica manual si hace falta.
+      if (succeeded.length === 0) {
+        const errs = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
         throw new Error(errs || "Meta rechazó la publicación");
       }
 
@@ -95,8 +100,13 @@ export async function runScheduledPublications(): Promise<{
         .update({ estado: "publicado", fecha_programada: null })
         .eq("id", row.id);
 
-      const pubIds = result.results.filter((r) => r.ok).map((r) => r.network).join(", ");
-      console.log(`[cron] publicado ${row.id} en ${pubIds}`);
+      const pubIds = succeeded.map((r) => r.network).join(", ");
+      if (failed.length > 0) {
+        const failMsg = failed.map((r) => `${r.network}: ${r.error}`).join(" · ");
+        console.warn(`[cron] publicación PARCIAL ${row.id} — ok: ${pubIds} | fallos: ${failMsg}`);
+      } else {
+        console.log(`[cron] publicado ${row.id} en ${pubIds}`);
+      }
       published++;
     } catch (e) {
       const msg = (e as Error).message;
