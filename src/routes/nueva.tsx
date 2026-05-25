@@ -23,6 +23,7 @@ import {
   ANGULOS, FORMATOS, REDES, type Archivo, supabase,
 } from "@/lib/content-center";
 import { generateImage, generateCopies } from "@/lib/generate.functions";
+import { refineChat, refinePrompt } from "@/lib/refine.functions";
 import { publishToMeta, buildMetaPayload } from "@/lib/meta.functions";
 
 export const Route = createFileRoute("/nueva")({
@@ -70,6 +71,8 @@ function NuevaPublicacion() {
   // Step 2 chat (only IA flow)
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Generation
   const [generating, setGenerating] = useState(false);
@@ -167,25 +170,56 @@ function NuevaPublicacion() {
     setUploadFile(null); setUploadPreview(null); setUploadTipo(null); setUploadedUrl(null);
   };
 
-  // ---------- Chat ----------
-  const sendChat = () => {
-    if (!chatInput.trim()) return;
+  // ---------- Chat (Refinar con el agente — Claude) ----------
+  const callRefineChat = useServerFn(refineChat);
+  const callRefinePrompt = useServerFn(refinePrompt);
+
+  const buildRefineInitial = () => ({
+    equipo,
+    idea,
+    angulo,
+    formato,
+    redes,
+    contextoTitulos: biblioteca
+      .filter((a) => contexto.includes(a.id))
+      .map((a) => a.nombre),
+  });
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
     const userText = chatInput.trim();
-    setChat((c) => [...c, { role: "user", text: userText }]);
+    const next: ChatMsg[] = [...chat, { role: "user", text: userText }];
+    setChat(next);
     setChatInput("");
-    setTimeout(() => {
-      setChat((c) => [...c, {
-        role: "agent",
-        text: `Perfecto. Propuesta de prompt visual:\n"${equipo || "Equipo"} en uso real, iluminación natural, ángulo ${angulo.toLowerCase()}, estética premium para ${redes[0] || "redes"}".\n\nCopy base: "${idea.slice(0, 80)}..." — adaptable por red. ¿Generamos?`,
-      }]);
-    }, 700);
+    setChatLoading(true);
+    try {
+      const { reply } = await callRefineChat({
+        data: { initial: buildRefineInitial(), conversation: next },
+      });
+      setChat((c) => [...c, { role: "agent", text: reply }]);
+    } catch (e) {
+      toast.error("Agente: " + (e as Error).message);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
-  // ---------- Generation (Lovable AI image + Claude copy) ----------
+  // Auto-scroll chat to bottom on new messages
+  useEffect(() => {
+    chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [chat, chatLoading]);
+
+  // ---------- Generation (Gemini image + Claude copy) ----------
   const callImage = useServerFn(generateImage);
   const callCopies = useServerFn(generateCopies);
 
-  const buildInput = (extra?: { instrucciones?: string }) => {
+  type InputOverrides = {
+    instrucciones?: string;
+    ideaOverride?: string;
+    contextoExtraOverride?: string;
+  };
+
+  const buildInput = (extra?: InputOverrides) => {
     // Imágenes de referencia: archivos seleccionados de Biblioteca (solo imágenes) + upload propio si es imagen
     const refsBiblio = biblioteca
       .filter((a) => contexto.includes(a.id) && a.tipo !== "pdf")
@@ -194,21 +228,24 @@ function NuevaPublicacion() {
       origen === "contenido_propio" && uploadedUrl && uploadTipo === "imagen" ? [uploadedUrl] : [];
     const referenceImageUrls = [...refsBiblio, ...refsUpload];
 
+    const baseIdea = origen === "ia" ? idea : (contextoExtra || idea);
+    const baseContextoExtra = origen === "contenido_propio" ? contextoExtra : undefined;
+
     return {
       equipo,
-      idea: origen === "ia" ? idea : (contextoExtra || idea),
+      idea: extra?.ideaOverride ?? baseIdea,
       angulo,
       formato: origen === "ia" ? formato : (uploadTipo === "video" ? "Video" : "Imagen"),
       redes,
-      contextoExtra: origen === "contenido_propio" ? contextoExtra : undefined,
+      contextoExtra: extra?.contextoExtraOverride ?? baseContextoExtra,
       referenceImageUrls: referenceImageUrls.length ? referenceImageUrls : undefined,
       instrucciones: extra?.instrucciones,
     };
   };
 
-  const runCopies = async () => {
+  const runCopies = async (overrides?: InputOverrides) => {
     try {
-      const { copies } = await callCopies({ data: buildInput() });
+      const { copies } = await callCopies({ data: buildInput(overrides) });
       setCopyByRed(copies);
     } catch (e) {
       toast.error((e as Error).message);
@@ -216,16 +253,30 @@ function NuevaPublicacion() {
     }
   };
 
-  // IA: generate image+copy in parallel
+  // IA: consolidate chat → refined inputs → generate image+copy in parallel
   const generarIA = async () => {
     setStep(3); setGenerating(true);
     try {
+      let overrides: InputOverrides | undefined;
+      try {
+        const refined = await callRefinePrompt({
+          data: { initial: buildRefineInitial(), conversation: chat },
+        });
+        overrides = {
+          ideaOverride: refined.ideaRefinada || undefined,
+          contextoExtraOverride: refined.contextoExtra || undefined,
+        };
+      } catch (e) {
+        // Non-fatal: fall back to raw inputs if consolidation fails
+        toast.error("No se pudo refinar el prompt, uso la idea original: " + (e as Error).message);
+      }
+
       const [img] = await Promise.all([
-        callImage({ data: buildInput() }).catch((e) => {
+        callImage({ data: buildInput(overrides) }).catch((e) => {
           toast.error("Imagen: " + (e as Error).message);
           return { url: null as string | null };
         }),
-        runCopies(),
+        runCopies(overrides),
       ]);
       if (img.url) setImagenUrl(img.url);
       setStep(4);
@@ -577,7 +628,7 @@ function NuevaPublicacion() {
         <Card>
           <CardHeader><CardTitle>Refinar con el agente</CardTitle></CardHeader>
           <CardContent>
-            <div className="space-y-3 max-h-[420px] overflow-y-auto p-1">
+            <div ref={chatScrollRef} className="space-y-3 max-h-[420px] overflow-y-auto p-1">
               {chat.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
@@ -592,16 +643,29 @@ function NuevaPublicacion() {
                   </div>
                 </div>
               ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm bg-muted text-foreground">
+                    <div className="text-xs font-medium opacity-70 mb-1 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> Agente
+                    </div>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-4 flex gap-2">
               <Input placeholder="Escribe tu respuesta…" value={chatInput}
+                disabled={chatLoading}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendChat()} />
-              <Button variant="outline" onClick={sendChat}><Send className="h-4 w-4" /></Button>
+              <Button variant="outline" onClick={sendChat} disabled={chatLoading || !chatInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
             <div className="flex justify-between pt-6">
-              <Button variant="ghost" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4 mr-2" /> Atrás</Button>
-              <Button onClick={generarIA}>Generar contenido <ArrowRight className="h-4 w-4 ml-2" /></Button>
+              <Button variant="ghost" onClick={() => setStep(1)} disabled={chatLoading}><ArrowLeft className="h-4 w-4 mr-2" /> Atrás</Button>
+              <Button onClick={generarIA} disabled={chatLoading}>Generar contenido <ArrowRight className="h-4 w-4 ml-2" /></Button>
             </div>
           </CardContent>
         </Card>
@@ -613,7 +677,7 @@ function NuevaPublicacion() {
           <CardContent className="py-20 flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <h3 className="text-lg font-medium">
-              {origen === "ia" ? "Generando con Gemini (Nano Banana)…" : "Generando copy para cada red…"}
+              {origen === "ia" ? "Refinando prompt y generando con Gemini…" : "Generando copy para cada red…"}
             </h3>
             <p className="text-sm text-muted-foreground">Esto puede tomar unos segundos.</p>
           </CardContent>
