@@ -40,6 +40,7 @@ const graphBase = () => `https://graph.facebook.com/${readEnv("META_GRAPH_VERSIO
 
 async function graphFetch(path: string, init: RequestInit & { qs?: Record<string, string> } = {}) {
   const { qs, ...rest } = init;
+  const method = (rest.method ?? "GET").toUpperCase();
   const url = new URL(`${graphBase()}${path}`);
   if (qs) for (const [k, v] of Object.entries(qs)) url.searchParams.set(k, v);
   const res = await fetch(url.toString(), rest);
@@ -47,8 +48,11 @@ async function graphFetch(path: string, init: RequestInit & { qs?: Record<string
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { json = null; }
   if (!res.ok) {
-    const msg = json?.error?.message || text || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const err = json?.error ?? {};
+    const msg = err.message || text || `HTTP ${res.status}`;
+    const detail = `code=${err.code ?? "?"} subcode=${err.error_subcode ?? "?"} type=${err.type ?? "?"} fbtrace=${err.fbtrace_id ?? "?"}`;
+    console.warn(`[meta] graphFetch FAILED ${method} ${path} status=${res.status} ${detail} message="${msg}"`);
+    throw new Error(`${msg} (${detail})`);
   }
   return json;
 }
@@ -82,6 +86,7 @@ async function publishInstagram(opts: {
   // have permission for this action. Se necesita el PAGE access token de la
   // página FB que posee la cuenta IG.
   const igToken = await getPageAccessToken(opts.pageId, opts.token);
+  console.log(`[meta] publishInstagram IMAGE start igUserId=${opts.igUserId} igTokenFp=${tokenFp(igToken)} imageUrl=${opts.imageUrl.slice(0, 80)}`);
 
   const created = await graphFetch(`/${opts.igUserId}/media`, {
     method: "POST",
@@ -93,6 +98,7 @@ async function publishInstagram(opts: {
   });
   const containerId = created?.id;
   if (!containerId) throw new Error("IG no devolvió container id");
+  console.log(`[meta] publishInstagram IMAGE container created id=${containerId}`);
 
   await waitForIgContainer(containerId, igToken);
 
@@ -102,6 +108,7 @@ async function publishInstagram(opts: {
   });
   const mediaId = published?.id;
   if (!mediaId) throw new Error("IG no devolvió media id al publicar");
+  console.log(`[meta] publishInstagram IMAGE PUBLISHED mediaId=${mediaId}`);
   return mediaId;
 }
 
