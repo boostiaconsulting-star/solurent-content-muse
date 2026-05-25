@@ -87,11 +87,12 @@ async function publishInstagram(opts: {
   // página FB que posee la cuenta IG.
   const igToken = await getPageAccessToken(opts.pageId, opts.token);
   console.log(`[meta] publishInstagram IMAGE start igUserId=${opts.igUserId} igTokenFp=${tokenFp(igToken)} imageUrl=${opts.imageUrl.slice(0, 80)}`);
+  const imageUrl = await preflightMediaUrl(opts.imageUrl, "publishInstagram IMAGE");
 
   const created = await graphFetch(`/${opts.igUserId}/media`, {
     method: "POST",
     qs: {
-      image_url: opts.imageUrl,
+      image_url: imageUrl,
       caption: opts.caption,
       access_token: igToken,
     },
@@ -120,12 +121,14 @@ async function publishInstagramReel(opts: {
   caption: string;
 }): Promise<string> {
   const igToken = await getPageAccessToken(opts.pageId, opts.token);
+  console.log(`[meta] publishInstagram REEL start igUserId=${opts.igUserId} igTokenFp=${tokenFp(igToken)} videoUrl=${opts.videoUrl.slice(0, 80)}`);
+  const videoUrl = await preflightMediaUrl(opts.videoUrl, "publishInstagram REEL");
 
   const created = await graphFetch(`/${opts.igUserId}/media`, {
     method: "POST",
     qs: {
       media_type: "REELS",
-      video_url: opts.videoUrl,
+      video_url: videoUrl,
       caption: opts.caption,
       share_to_feed: "true",
       access_token: igToken,
@@ -150,6 +153,34 @@ async function publishInstagramReel(opts: {
 function tokenFp(token: string): string {
   if (!token) return "(empty)";
   return `len=${token.length}/…${token.slice(-4)}`;
+}
+
+/**
+ * Verifica que Meta pueda descargar el medio: hace GET desde el Worker
+ * y loguea status, content-type, tamaño y si hubo redirect. Si la URL
+ * redirige, devuelve la URL final resuelta — algunos endpoints de Meta
+ * fallan con code=100/subcode=33 cuando la URL inicial es un redirect.
+ * Para diagnóstico de fallos tipo "Object cannot be loaded" de IG.
+ */
+async function preflightMediaUrl(url: string, label: string): Promise<string> {
+  try {
+    const res = await fetch(url, { method: "GET", redirect: "follow" });
+    const ct = res.headers.get("content-type") || "(none)";
+    const cl = res.headers.get("content-length") || "(unknown)";
+    const finalUrl = res.url;
+    const redirected = finalUrl !== url;
+    const status = res.ok ? "OK" : "FAIL";
+    console.log(
+      `[meta] ${label} preflight ${status} status=${res.status} ct=${ct} size=${cl} redirected=${redirected}${redirected ? ` finalUrl=${finalUrl.slice(0, 100)}` : ""}`,
+    );
+    await res.body?.cancel();
+    // Si el GET resolvió a una URL distinta, devolvemos esa para que Meta no
+    // tenga que seguir redirects (a veces los rechaza con 100/33).
+    return res.ok && redirected ? finalUrl : url;
+  } catch (e) {
+    console.warn(`[meta] ${label} preflight ERROR err="${(e as Error).message}" (usando url original)`);
+    return url;
+  }
 }
 
 /**
