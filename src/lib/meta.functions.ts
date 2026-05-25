@@ -57,16 +57,28 @@ async function graphFetch(path: string, init: RequestInit & { qs?: Record<string
   return json;
 }
 
-async function waitForIgContainer(containerId: string, token: string, timeoutMs = 25_000) {
+/**
+ * Polling del status del IG media container. Recibe el USER access token
+ * (NO el Page token derivado): el endpoint GET /{containerId} responde
+ * code=100/subcode=33 cuando se le pasa el Page token aunque el POST /media
+ * sí acepte ese mismo Page token. Misma observación documentada por varios
+ * desarrolladores en la comunidad de Meta — el endpoint del container es el
+ * único de la cadena IG content publish que requiere el token original.
+ */
+async function waitForIgContainer(containerId: string, userToken: string, timeoutMs = 25_000) {
+  console.log(`[meta] waitForIgContainer poll start containerId=${containerId} userTokenFp=${tokenFp(userToken)} timeoutMs=${timeoutMs}`);
   const deadline = Date.now() + timeoutMs;
   let lastStatus = "UNKNOWN";
   while (Date.now() < deadline) {
     const data = await graphFetch(`/${containerId}`, {
       method: "GET",
-      qs: { fields: "status_code,status", access_token: token },
+      qs: { fields: "status_code,status", access_token: userToken },
     });
     lastStatus = data?.status_code ?? lastStatus;
-    if (lastStatus === "FINISHED") return;
+    if (lastStatus === "FINISHED") {
+      console.log(`[meta] waitForIgContainer poll FINISHED containerId=${containerId}`);
+      return;
+    }
     if (lastStatus === "ERROR" || lastStatus === "EXPIRED") {
       throw new Error(`IG container ${lastStatus}: ${data?.status ?? ""}`);
     }
@@ -101,7 +113,9 @@ async function publishInstagram(opts: {
   if (!containerId) throw new Error("IG no devolvió container id");
   console.log(`[meta] publishInstagram IMAGE container created id=${containerId}`);
 
-  await waitForIgContainer(containerId, igToken);
+  // Polling: usar USER token (opts.token), no igToken (Page token).
+  // Ver comentario en waitForIgContainer.
+  await waitForIgContainer(containerId, opts.token);
 
   const published = await graphFetch(`/${opts.igUserId}/media_publish`, {
     method: "POST",
@@ -138,7 +152,8 @@ async function publishInstagramReel(opts: {
   if (!containerId) throw new Error("IG no devolvió container id para video");
 
   // Videos tardan más en procesarse — hasta 5 min para reels largos.
-  await waitForIgContainer(containerId, igToken, 5 * 60_000);
+  // Polling: usar USER token, no igToken. Ver waitForIgContainer.
+  await waitForIgContainer(containerId, opts.token, 5 * 60_000);
 
   const published = await graphFetch(`/${opts.igUserId}/media_publish`, {
     method: "POST",
