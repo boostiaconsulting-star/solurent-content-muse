@@ -139,20 +139,57 @@ async function publishInstagramReel(opts: {
   return mediaId;
 }
 
-/** Intercambia USER token por PAGE access token; FB lo requiere para escribir en páginas. */
+/** Token fingerprint para logs: longitud + últimos 4 chars. Nunca logueamos el token completo. */
+function tokenFp(token: string): string {
+  if (!token) return "(empty)";
+  return `len=${token.length}/…${token.slice(-4)}`;
+}
+
+/**
+ * Intercambia USER token por PAGE access token; Meta lo requiere para escribir
+ * en páginas y para publicar en IG. Loggea exactamente qué responde Meta: si
+ * la derivación falla (rol, scope, etc.) la fila cae al USER token, lo cual
+ * sí publica FB pero IG lo rechaza con Authorization Error.
+ */
 async function getPageAccessToken(pageId: string, userToken: string): Promise<string> {
+  const url = new URL(`${graphBase()}/${pageId}`);
+  url.searchParams.set("fields", "access_token");
+  url.searchParams.set("access_token", userToken);
+
+  let res: Response;
   try {
-    const tokenData = await graphFetch(`/${pageId}`, {
-      method: "GET",
-      qs: { fields: "access_token", access_token: userToken },
-    });
-    if (typeof tokenData?.access_token === "string" && tokenData.access_token.length > 0) {
-      return tokenData.access_token;
-    }
-  } catch {
-    // si falla la derivación, caemos al USER token (algunos long-lived funcionan directo)
+    res = await fetch(url.toString());
+  } catch (e) {
+    console.warn(
+      `[meta] getPageAccessToken NETWORK_ERROR pageId=${pageId} userTokenFp=${tokenFp(userToken)} err="${(e as Error).message}" → fallback a USER token`,
+    );
+    return userToken;
   }
-  return userToken;
+
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* dejar json=null */ }
+
+  if (!res.ok) {
+    const err = json?.error ?? {};
+    console.warn(
+      `[meta] getPageAccessToken FAILED pageId=${pageId} userTokenFp=${tokenFp(userToken)} status=${res.status} code=${err.code ?? "?"} subcode=${err.error_subcode ?? "?"} message="${err.message ?? text.slice(0, 200)}" fbtrace=${err.fbtrace_id ?? "?"} → fallback a USER token`,
+    );
+    return userToken;
+  }
+
+  const pageToken = typeof json?.access_token === "string" ? json.access_token : "";
+  if (!pageToken) {
+    console.warn(
+      `[meta] getPageAccessToken OK pero SIN access_token en la respuesta pageId=${pageId} userTokenFp=${tokenFp(userToken)} body=${JSON.stringify(json).slice(0, 200)} → fallback a USER token`,
+    );
+    return userToken;
+  }
+
+  console.log(
+    `[meta] getPageAccessToken OK pageId=${pageId} userTokenFp=${tokenFp(userToken)} pageTokenFp=${tokenFp(pageToken)} (diff=${pageToken !== userToken})`,
+  );
+  return pageToken;
 }
 
 async function publishFacebook(opts: {
