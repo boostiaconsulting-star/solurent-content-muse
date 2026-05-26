@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2, Pencil } from "lucide-react";
+import { Plus, CalendarClock, Sparkles, MoreVertical, Trash2, CalendarCog, Send, Loader2, Pencil, ChevronDown, ChevronUp, Archive } from "lucide-react";
 import { MediaActions } from "@/components/MediaActions";
 import { EditPublicacionDialog } from "@/components/EditPublicacionDialog";
 import { useServerFn } from "@tanstack/react-start";
@@ -49,6 +49,7 @@ function Index() {
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const publishToMetaFn = useServerFn(publishToMeta);
 
   const publicarAhora = async (p: Publicacion) => {
@@ -161,12 +162,96 @@ function Index() {
     toast.success("Publicación programada");
   };
 
+  const programadas = items.filter((p) => p.estado !== "publicado");
+  const publicadas = items.filter((p) => p.estado === "publicado");
+
+  const renderCard = (p: Publicacion) => {
+    // Fallback para publicaciones legacy de contenido propio donde
+    // imagen_url quedó null pero la URL real está en contenido_url.
+    const mediaUrl = p.imagen_url ?? p.contenido_url ?? null;
+    const isVideo = p.contenido_tipo === "video";
+    return (
+      <Card key={p.id} className="overflow-hidden relative group">
+        {mediaUrl && (
+          <div className="aspect-video bg-muted relative group/img">
+            {isVideo ? (
+              <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+            ) : (
+              <img src={mediaUrl} alt={p.equipo ?? ""} className="w-full h-full object-cover" />
+            )}
+            <MediaActions
+              url={mediaUrl}
+              caption={`${p.equipo ?? ""} · ${p.angulo ?? ""}`}
+              className="absolute bottom-2 left-2 opacity-0 group-hover/img:opacity-100 transition-opacity"
+            />
+          </div>
+        )}
+        <div className="absolute top-2 right-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => publicarAhora(p)}
+                disabled={publishingId === p.id}
+              >
+                {publishingId === p.id ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                Publicar ahora
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setToEdit(p)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openReschedule(p)}>
+                <CalendarCog className="h-4 w-4 mr-2" />
+                {p.fecha_programada ? "Reprogramar" : "Programar"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setToDelete(p)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <Badge className={estadoColor(p.estado)}>{p.estado}</Badge>
+            <span className="text-xs text-muted-foreground">{p.formato}</span>
+          </div>
+          <h3 className="font-medium line-clamp-1">{p.equipo || "Sin equipo"}</h3>
+          <p className="text-sm text-muted-foreground line-clamp-2">{p.idea}</p>
+          <div className="flex flex-wrap gap-1 pt-1">
+            {(p.redes ?? []).map((r) => (
+              <Badge key={r} variant="outline" className="text-xs">{r}</Badge>
+            ))}
+          </div>
+          {p.fecha_programada && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
+              <CalendarClock className="h-3 w-3" />
+              {new Date(p.fecha_programada).toLocaleString("es-MX")}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 md:p-10">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-semibold">Publicaciones</h1>
-          <p className="text-muted-foreground">Borradores, aprobados y programados.</p>
+          <p className="text-muted-foreground">Lo que está por publicar y lo que ya salió.</p>
         </div>
         <Button asChild size="lg">
           <Link to="/nueva">
@@ -195,87 +280,47 @@ function Index() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((p) => {
-            // Fallback para publicaciones legacy de contenido propio donde
-            // imagen_url quedó null pero la URL real está en contenido_url.
-            const mediaUrl = p.imagen_url ?? p.contenido_url ?? null;
-            const isVideo = p.contenido_tipo === "video";
-            return (
-            <Card key={p.id} className="overflow-hidden relative group">
-              {mediaUrl && (
-                <div className="aspect-video bg-muted relative group/img">
-                  {isVideo ? (
-                    <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                  ) : (
-                    <img src={mediaUrl} alt={p.equipo ?? ""} className="w-full h-full object-cover" />
-                  )}
-                  <MediaActions
-                    url={mediaUrl}
-                    caption={`${p.equipo ?? ""} · ${p.angulo ?? ""}`}
-                    className="absolute bottom-2 left-2 opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  />
+        <div className="space-y-10">
+          {/* Programadas — todo lo que aún no se ha publicado */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4">
+              Programadas <span className="text-muted-foreground font-normal">({programadas.length})</span>
+            </h2>
+            {programadas.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  No hay nada programado. <Link to="/nueva" className="text-primary underline">Crear nueva publicación</Link>.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {programadas.map(renderCard)}
+              </div>
+            )}
+          </section>
+
+          {/* Publicaciones anteriores — colapsable, default cerrado */}
+          {publicadas.length > 0 && (
+            <section>
+              <button
+                type="button"
+                onClick={() => setShowHistory((v) => !v)}
+                className="w-full flex items-center justify-between gap-3 mb-4 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+              >
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Archive className="h-5 w-5 text-muted-foreground" />
+                  Publicaciones anteriores
+                  <span className="text-muted-foreground font-normal">({publicadas.length})</span>
+                </h2>
+                {showHistory ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+              </button>
+              {showHistory && (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {publicadas.map(renderCard)}
                 </div>
               )}
-              <div className="absolute top-2 right-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => publicarAhora(p)}
-                      disabled={publishingId === p.id}
-                    >
-                      {publishingId === p.id ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4 mr-2" />
-                      )}
-                      Publicar ahora
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setToEdit(p)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openReschedule(p)}>
-                      <CalendarCog className="h-4 w-4 mr-2" />
-                      {p.fecha_programada ? "Reprogramar" : "Programar"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setToDelete(p)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Badge className={estadoColor(p.estado)}>{p.estado}</Badge>
-                  <span className="text-xs text-muted-foreground">{p.formato}</span>
-                </div>
-                <h3 className="font-medium line-clamp-1">{p.equipo || "Sin equipo"}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-2">{p.idea}</p>
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {(p.redes ?? []).map((r) => (
-                    <Badge key={r} variant="outline" className="text-xs">{r}</Badge>
-                  ))}
-                </div>
-                {p.fecha_programada && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
-                    <CalendarClock className="h-3 w-3" />
-                    {new Date(p.fecha_programada).toLocaleString("es-MX")}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            );
-          })}
+            </section>
+          )}
         </div>
       )}
 
