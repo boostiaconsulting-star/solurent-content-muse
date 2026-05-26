@@ -26,14 +26,32 @@ const REDES_GUIDE: Record<string, string> = {
     "Título-gancho corto al inicio + descripción breve (máx 100 palabras). 3-5 hashtags al final. Tono dinámico y directo.",
 };
 
-type BrandCtx = { colors?: Record<string, string> | null; logo_url?: string | null } | null;
+type BrandCtx = {
+  colors?: Record<string, string> | null;
+  logo_url?: string | null;
+  fonts?: Record<string, string> | null;
+} | null;
 
 async function loadBranding(): Promise<BrandCtx> {
   try {
     const { data } = await supabaseAdmin
-      .from("branding").select("colors, logo_url").eq("id", "default").maybeSingle();
+      .from("branding").select("colors, logo_url, fonts").eq("id", "default").maybeSingle();
     return (data ?? null) as BrandCtx;
   } catch { return null; }
+}
+
+/** Resumen compacto del branding para meterlo como contexto al prompt optimizer. */
+function brandSummary(brand: BrandCtx): string {
+  if (!brand) return "(sin branding configurado)";
+  const lines: string[] = [];
+  const colors = brand.colors ?? {};
+  const palette = Object.entries(colors).filter(([, v]) => !!v).map(([k, v]) => `${k}=${v}`).join(", ");
+  if (palette) lines.push(`Paleta: ${palette}`);
+  const fonts = brand.fonts ?? {};
+  const fontList = Object.entries(fonts).filter(([, v]) => !!v).map(([k, v]) => `${k}=${v}`).join(", ");
+  if (fontList) lines.push(`Fuentes: ${fontList}`);
+  if (brand.logo_url) lines.push("Logo: presente (NO renderizarlo en la imagen, solo respetar estilo)");
+  return lines.length ? lines.join("\n") : "(branding vacío)";
 }
 
 function brandBlock(brand: BrandCtx): string {
@@ -100,13 +118,13 @@ async function uploadToBucket(bytes: Uint8Array, mime: string, equipo: string): 
 }
 
 /** Generación vía Google Gemini 2.5 Flash Image (Nano Banana). Soporta text-to-image y multimodal. */
-async function generateWithGemini(data: GenInput, brand: BrandCtx): Promise<string> {
+async function generateWithGemini(data: GenInput, brand: BrandCtx, promptOverride?: string): Promise<string> {
   const GOOGLE_API_KEY = readEnv("GOOGLE_API_KEY");
   if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY no configurada");
 
   const refs = (data.referenceImageUrls ?? []).slice(0, 4);
   const hasRefs = refs.length > 0;
-  const prompt = buildPrompt(data, hasRefs, brand);
+  const prompt = promptOverride ?? buildPrompt(data, hasRefs, brand);
 
   const parts: Array<Record<string, unknown>> = [{ text: prompt }];
   for (const url of refs) {
@@ -213,11 +231,127 @@ async function generateWithHiggsfield(data: GenInput, brand: BrandCtx): Promise<
 }
 */
 
+/** ===== Prompt optimizer (Claude) — enriquece el prompt visual antes de Gemini ===== */
+
+export type PromptOptimizerInput = {
+  equipo: string;
+  idea: string;
+  angulo: string;
+  redes: string[];
+  promptActual: string;
+  historialMensajes?: Array<{ role: string; content: string }>;
+  esRegeneracion?: boolean;
+};
+
+const OPTIMIZER_SYSTEM = `Eres un experto en prompts para generación de imagen publicitaria de industria de renta de equipos (Solurent, México). Tu trabajo es enriquecer un prompt visual incorporando el branding real de la marca (colores, fuentes, estilo) y el contexto de la publicación.
+
+Reglas estrictas:
+- Responde ÚNICAMENTE con el prompt optimizado. Sin explicaciones, sin frases tipo "Aquí está el prompt:", sin markdown, sin comillas envolventes, sin frase de cierre.
+- El prompt debe ser visual, detallado y específico: composición, iluminación, escena/contexto industrial real, sugerencia de cámara/lente cuando aporte, paleta cromática (incorporando los colores de marca como luces, props, fondos o gráficos sutiles), mood, tipo de plano.
+- NO menciones renderizar el logo (los generadores suelen romperlo). Solo respeta el estilo cromático y de fuentes para que la imagen se sienta de la marca.
+- NO inventes especificaciones técnicas del equipo. Si la idea las menciona, respétalas; si no, mantén descripciones genéricas y plausibles.
+- Español neutro de México. Sin emojis.
+- Optimiza para el formato típico de las redes seleccionadas (IG/TikTok: vertical o cuadrado, encuadre limpio; FB: horizontal o cuadrado con espacio para contexto).
+- Si recibes historial de mensajes, incorpora el feedback al prompt nuevo.
+- Si es REGENERACIÓN, ajusta el prompt anterior basándote en las instrucciones nuevas. Mejora, no reescribas desde cero.`;
+
+async function callClaudeForPrompt(system: string, userContent: string, maxTokens = 800): Promise<string> {
+  const key = readEnv("ANTHROPIC_API_KEY") ?? readEnv("Anthropic_API_Key");
+  if (!key) throw new Error("ANTHROPIC_API_KEY no configurada");
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: userContent }],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Claude (${res.status}): ${t}`);
+  }
+  const json = await res.json();
+  const text: string = json.content?.[0]?.text ?? "";
+  if (!text) throw new Error("Claude devolvió respuesta vacía");
+  return text.trim();
+}
+
+/** Lógica reusable del optimizer. Si `brand` viene null/undefined se carga aquí
+ * (cuando se llama desde generateImage pasamos el brand ya cargado para evitar
+ * un round-trip extra a Supabase). */
+export async function runPromptOptimizer(
+  input: PromptOptimizerInput,
+  brand?: BrandCtx,
+): Promise<{ prompt: string }> {
+  const b = brand !== undefined ? brand : await loadBranding();
+
+  const historial = (input.historialMensajes ?? [])
+    .filter((m) => m && typeof m.content === "string" && m.content.trim().length > 0)
+    .map((m) => `- ${m.role}: ${m.content.trim()}`)
+    .join("\n");
+
+  const userContent = `Datos de la publicación:
+- Equipo/producto: ${input.equipo || "sin especificar"}
+- Idea/mensaje: ${input.idea}
+- Ángulo: ${input.angulo}
+- Redes: ${input.redes.join(", ")}
+
+Branding de Solurent:
+${brandSummary(b)}
+
+Prompt actual (a optimizar):
+${input.promptActual}${historial ? `\n\nHistorial de mensajes / feedback:\n${historial}` : ""}${input.esRegeneracion ? "\n\nEsta es una REGENERACIÓN. Ajusta el prompt anterior basándote en las instrucciones nuevas." : ""}
+
+Devuelve SOLO el prompt optimizado listo para el generador de imagen.`;
+
+  const optimized = await callClaudeForPrompt(OPTIMIZER_SYSTEM, userContent, 800);
+  return { prompt: optimized };
+}
+
+/** Server fn wrapper para uso desde el cliente si hace falta. generateImage lo
+ * invoca internamente vía runPromptOptimizer para reutilizar el brand cargado. */
+export const promptOptimizer = createServerFn({ method: "POST" })
+  .inputValidator((d: PromptOptimizerInput) => d)
+  .handler(async ({ data }) => runPromptOptimizer(data));
+
 export const generateImage = createServerFn({ method: "POST" })
   .inputValidator((d: GenInput) => d)
   .handler(async ({ data }) => {
     const brand = await loadBranding();
-    const url = await generateWithGemini(data, brand);
+    const refs = (data.referenceImageUrls ?? []).slice(0, 4);
+    const hasRefs = refs.length > 0;
+    const rawPrompt = buildPrompt(data, hasRefs, brand);
+
+    let finalPrompt = rawPrompt;
+    try {
+      const { prompt: optimized } = await runPromptOptimizer({
+        equipo: data.equipo,
+        idea: data.idea,
+        angulo: data.angulo,
+        redes: data.redes,
+        promptActual: rawPrompt,
+        historialMensajes: data.instrucciones
+          ? [{ role: "user", content: data.instrucciones }]
+          : undefined,
+        esRegeneracion: !!data.instrucciones,
+      }, brand);
+      if (optimized) {
+        finalPrompt = optimized;
+        console.log(`[generate] promptOptimizer OK rawLen=${rawPrompt.length} optimizedLen=${optimized.length}`);
+      }
+    } catch (e) {
+      // No fatal: si Claude falla seguimos con el prompt raw para no bloquear la generación.
+      console.warn(`[generate] promptOptimizer FAILED, uso prompt raw. err="${(e as Error).message}"`);
+    }
+
+    const url = await generateWithGemini(data, brand, finalPrompt);
     return { url };
   });
 
